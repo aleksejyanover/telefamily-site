@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TFamily — мессенджер, как Telegram, но свой</title>
+<meta name="description" content="TFamily: сообщения, фото и видео, голосовые, кружки, звонки и видеозвонки, группы. Свой мессенджер со своим сервером.">
+<link rel="icon" href="icon.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --accent: #5b8cff; --accent2: #22d3ee;
+    --bg: #0b0f17; --panel: #121826; --panel2: #182032;
+    --text: #e9eef8; --muted: #8b97ad; --line: #222c41;
+    --grad: linear-gradient(135deg, #5b8cff 0%, #22d3ee 100%);
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: min(1080px, 92vw); margin: 0 auto; }
+
+  .glow { position: fixed; z-index: -1; border-radius: 50%; filter: blur(120px); opacity: .35; pointer-events: none; }
+  .glow.a { width: 480px; height: 480px; background: #3f6fe0; top: -160px; left: -120px; }
+  .glow.b { width: 420px; height: 420px; background: #22d3ee; top: 10%; right: -160px; }
+
+  header { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); background: rgba(11,15,23,.75); border-bottom: 1px solid var(--line); }
+  .nav { display: flex; align-items: center; gap: 18px; padding: 14px 0; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: .5px; }
+  .logo .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--grad); display: grid; place-items: center; font-size: 18px; color: #fff; box-shadow: 0 6px 18px rgba(91,140,255,.4); }
+  nav { margin-left: auto; display: flex; gap: 20px; color: var(--muted); font-size: 14.5px; }
+  nav a:hover { color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; font-weight: 700; font-size: 15px; padding: 11px 20px; border-radius: 12px; transition: .18s; }
+  .btn.primary { background: var(--grad); color: #fff; box-shadow: 0 8px 26px rgba(91,140,255,.35); }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(91,140,255,.5); }
+  .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  .btn.ghost:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .nav .btn { padding: 9px 16px; }
+
+  .hero { text-align: center; padding: 76px 0 40px; }
+  .badge { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--accent2); background: rgba(34,211,238,.09); border: 1px solid rgba(34,211,238,.3); padding: 6px 14px; border-radius: 999px; margin-bottom: 22px; }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 10px var(--accent2); }
+  h1 { font-size: clamp(32px, 5.4vw, 56px); line-height: 1.15; letter-spacing: -1px; }
+  h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: clamp(16px, 2vw, 19px); max-width: 640px; margin: 18px auto 30px; }
+  .hero-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero-note { margin-top: 16px; color: var(--muted); font-size: 13.5px; }
+  .status { display: inline-flex; align-items: center; gap: 7px; }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: #ffb020; transition: .3s; }
+  .status.ok i { background: #3fd08a; box-shadow: 0 0 10px #3fd08a; }
+
+  section { padding: 54px 0 8px; }
+  h2 { font-size: clamp(24px, 3.4vw, 34px); text-align: center; margin-bottom: 8px; letter-spacing: -.5px; }
+  .sect-sub { text-align: center; color: var(--muted); margin-bottom: 30px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; transition: .2s; }
+  .card:hover { transform: translateY(-4px); border-color: rgba(91,140,255,.5); box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+  .card .ico { font-size: 30px; margin-bottom: 10px; }
+  .card h3 { font-size: 17px; margin-bottom: 6px; }
+  .card p { color: var(--muted); font-size: 14.5px; }
+  .card .new { font-size: 11px; font-weight: 800; color: #06212a; background: var(--accent2); border-radius: 999px; padding: 2px 8px; vertical-align: 3px; margin-left: 6px; }
+
+  .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .plan { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 16px; text-align: center; transition: .2s; }
+  .plan:hover { border-color: var(--accent); transform: translateY(-3px); }
+  .plan.hot { background: linear-gradient(160deg, rgba(91,140,255,.16), rgba(34,211,238,.08)); border-color: rgba(91,140,255,.6); }
+  .plan .name { font-weight: 800; font-size: 15px; }
+  .plan .price { font-size: 27px; font-weight: 800; margin: 8px 0 2px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .plan .per { color: var(--muted); font-size: 12.5px; }
+  .plan .tag { font-size: 11px; color: var(--accent2); font-weight: 700; margin-top: 8px; }
+  .plan-note { text-align: center; color: var(--muted); font-size: 13.5px; margin-top: 18px; }
+
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; position: relative; }
+  .step .num { position: absolute; top: -14px; left: 18px; width: 30px; height: 30px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff; }
+  .step h3 { font-size: 16px; margin: 6px 0 6px; }
+  .step p { color: var(--muted); font-size: 14.5px; }
+
+  footer { margin-top: 60px; border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 14px; }
+  .foot { display: flex; gap: 14px; justify-content: space-between; flex-wrap: wrap; align-items: center; }
+
+  @media (max-width: 720px) {
+    nav { display: none; }
+    .hero { padding: 52px 0 26px; }
+    .hero-btns .btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="glow a"></div><div class="glow b"></div>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="./"><span class="mark">T</span> TFamily</a>
+    <nav>
+      <a href="#features">Возможности</a>
+      <a href="#plans">Тарифы</a>
+      <a href="#start">Как начать</a>
+      <a href="#download">Скачать</a>
+    </nav>
+    <a class="btn primary" id="chatTop" href="#">💬 Открыть чат</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="badge"><span class="dot"></span> свой мессенджер · свой сервер · без слежки</div>
+    <h1>Общение <span class="grad">без границ</span><br>как Telegram, но по-своему</h1>
+    <p class="sub">Сообщения, фото и видео, голосовые, кружки, <b>аудиозвонки и видеозвонки</b>, группы и реакции — всё в одном приложении, которое работает на твоём собственном сервере.</p>
+    <div class="hero-btns">
+      <a class="btn primary chat" href="#">💬 Открыть чат в браузере</a>
+      <a class="btn ghost" href="https://github.com/aleksejyanover/tfamily-site/releases/download/v1.0/TFamily.apk">📱 Скачать для Android · 4.6 МБ</a>
+      <a class="btn ghost" href="https://github.com/aleksejyanover/tfamily-site/releases/download/v1.0/TFamily.dmg">🖥 Скачать для Mac · 1.6 МБ</a>
+    </div>
+    <div class="hero-note">
+      Скачивание — прямо с GitHub, установка не обязательна: можно открыть чат в браузере.
+      <span class="status" id="status"><i></i> проверяю сервер…</span>
+    </div>
+  </div>
+
+  <section id="features">
+    <h2>Всё, что нужно для общения</h2>
+    <p class="sect-sub">Никаких лишних функций — только то, чем реально пользуешься</p>
+    <div class="grid">
+      <div class="card"><div class="ico">💬</div><h3>Сообщения, фото, видео</h3><p>Текст, картинки, ролики и файлы любого размера — до лимита твоего тарифа.</p></div>
+      <div class="card"><div class="ico">🎙</div><h3>Голосовые и кружки</h3><p>Записывай голосовое одним нажатием или круглое видеосообщение — как в Telegram.</p></div>
+      <div class="card"><div class="ico">🎥</div><h3>Звонки <span class="new">НОВОЕ</span></h3><p>Аудиозвонки и видеозвонки с микрофоном и камерой, рингтоном и таймером разговора.</p></div>
+      <div class="card"><div class="ico">👥</div><h3>Группы и реакции</h3><p>Групповые чаты, реакции на сообщения, ответы, редактирование и удаление.</p></div>
+      <div class="card"><div class="ico">🔔</div><h3>Уведомления и статусы</h3><p>Кто «в сети», кто печатает, уведомления о новых сообщениях и пропущенных звонках.</p></div>
+      <div class="card"><div class="ico">💳</div><h3>Честные тарифы</h3><p>5 тарифов от 0 до 699 ₽ в месяц, оплата картой, отмена в любой момент.</p></div>
+    </div>
+  </section>
+
+  <section id="plans">
+    <h2>Тарифы</h2>
+    <p class="sect-sub">Привязываешь карту один раз — списание идёт автоматически, пока не отменишь подписку</p>
+    <div class="plans">
+      <div class="plan"><div class="name">Бесплатный</div><div class="price">0 ₽</div><div class="per">навсегда</div><div class="tag">25 МБ на файлы</div></div>
+      <div class="plan"><div class="name">Старт</div><div class="price">99 ₽</div><div class="per">в месяц</div><div class="tag">100 МБ</div></div>
+      <div class="plan hot"><div class="name">Плюс</div><div class="price">199 ₽</div><div class="per">в месяц</div><div class="tag">300 МБ · популярный</div></div>
+      <div class="plan"><div class="name">Семья</div><div class="price">349 ₽</div><div class="per">в месяц</div><div class="tag">300 МБ для всех</div></div>
+      <div class="plan"><div class="name">Про</div><div class="price">699 ₽</div><div class="per">в месяц</div><div class="tag">512 МБ</div></div>
+    </div>
+    <p class="plan-note">Оплата в демо-режиме: настоящие деньги не списываются, номер карты не хранится — остаются только последние 4 цифры.</p>
+  </section>
+
+  <section id="start">
+    <h2>Как начать</h2>
+    <p class="sect-sub">Три шага — и ты в чате</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Открой чат или поставь приложение</h3><p>Нажми «Открыть чат» в браузере либо скачай APK для телефона или DMG для Mac — файлы отдаёт GitHub.</p></div>
+      <div class="step"><div class="num">2</div><h3>Зарегистрируйся за 10 секунд</h3><p>Юзернейм и пароль — или вход по своему GitHub-логину, без анкет.</p></div>
+      <div class="step"><div class="num">3</div><h3>Добавь друзей и звони</h3><p>Найди друга по юзернейму, напиши первым и позвони — кружки и звонки работают сразу.</p></div>
+    </div>
+  </section>
+
+  <section id="download">
+    <h2>Скачать приложения</h2>
+    <p class="sect-sub">Небольшие файлы — ставятся за минуту, отдаёт GitHub Releases</p>
+    <div class="hero-btns" style="margin-bottom: 8px;">
+      <a class="btn primary" href="https://github.com/aleksejyanover/tfamily-site/releases/download/v1.0/TFamily.apk">📱 Android TFamily.apk · 4.6 МБ</a>
+      <a class="btn primary" href="https://github.com/aleksejyanover/tfamily-site/releases/download/v1.0/TFamily.dmg">🖥 Mac TFamily.dmg · 1.6 МБ</a>
+      <a class="btn ghost chat" href="#">💬 Веб-версия</a>
+    </div>
+    <p class="hero-note">Чат работает, пока включён Mac хозяина сервера. Скачанные приложения сами подключаются к нему.</p>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap foot">
+    <div class="logo" style="font-size:16px"><span class="mark" style="width:28px;height:28px;font-size:15px">T</span> TFamily</div>
+    <div>Мессенджер, как Telegram, но свой · 2026</div>
+    <div id="ver">сервер: …</div>
+  </div>
+</footer>
+
+<script>
+  /* адрес чата (сервер хозяина) — вшит при сборке */
+  var CHAT = "https://c9b2ff341225b2.lhr.life/?app=1";
+  var PING = "https://c9b2ff341225b2.lhr.life/api/ping";
+  [].forEach.call(document.querySelectorAll('.chat, .chatTop, a.chat'), function (a) { a.href = CHAT; });
+  document.getElementById('chatTop').href = CHAT;
+
+  fetch(PING).then(function (r) { return r.json(); }).then(function () {
+    var s = document.getElementById('status');
+    s.classList.add('ok');
+    s.lastChild.textContent = ' сервер работает — можно звонить и писать';
+    document.getElementById('ver').textContent = 'сервер: онлайн';
+  }).catch(function () {
+    document.getElementById('ver').textContent = 'сервер: выключен';
+    var s = document.getElementById('status');
+    s.lastChild.textContent = ' сервер выключен — включи Mac хозяина';
+  });
+</script>
+</body>
+</html>
