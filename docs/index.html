@@ -148,12 +148,12 @@
   </section>
 
   <section id="start">
-    <h2>Как начать</h2>
-    <p class="sect-sub">Три шага — и ты в чате</p>
+    <h2>Как зайти друзьям</h2>
+    <p class="sect-sub">Ниже — три шага, дальше всё просто</p>
     <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Открой чат или поставь приложение</h3><p>Нажми «Открыть чат» в браузере либо скачай APK для телефона или DMG для Mac — файлы отдаёт GitHub.</p></div>
-      <div class="step"><div class="num">2</div><h3>Зарегистрируйся за 10 секунд</h3><p>Юзернейм и пароль — или вход по своему GitHub-логину, без анкет.</p></div>
-      <div class="step"><div class="num">3</div><h3>Добавь друзей и звони</h3><p>Найди друга по юзернейму, напиши первым и позвони — кружки и звонки работают сразу.</p></div>
+      <div class="step"><div class="num">1</div><h3>Открой чат</h3><p>Нажми «Открыть чат» — кнопка всегда ведёт на свежий адрес сервера. Если сервер на секунду упал, страница подождёт и откроется сама.</p></div>
+      <div class="step"><div class="num">2</div><h3>Зарегистрируйся</h3><p>Юзернейм (можно русскими буквами — превратим в латиницу сами), имя и пароль от 4 символов. Никаких анкет и подтверждений.</p></div>
+      <div class="step"><div class="num">3</div><h3>Пиши и звони</h3><p>Найди друзей по юзернейму, добавляй в группу, звони и записывай кружки — всё работает сразу и с телефона, и с компьютера.</p></div>
     </div>
   </section>
 
@@ -179,8 +179,8 @@
 
 <script>
   /* адрес чата (сервер хозяина) — вшит при сборке */
-  var CHAT = "https://4b86beacce6f0d.lhr.life/?app=1";
-  var PING = "https://4b86beacce6f0d.lhr.life/api/ping";
+  var CHAT = "https://a9dd45fd2aaba5.lhr.life/?app=1";
+  var PING = "https://a9dd45fd2aaba5.lhr.life/api/ping";
   [].forEach.call(document.querySelectorAll('.chat, .chatTop, a.chat'), function (a) { a.href = CHAT; });
   document.getElementById('chatTop').href = CHAT;
 
@@ -190,9 +190,10 @@
     s.lastChild.textContent = ' сервер работает — можно звонить и писать';
     document.getElementById('ver').textContent = 'сервер: онлайн';
   }).catch(function () {
-    document.getElementById('ver').textContent = 'сервер: выключен';
+    document.getElementById('ver').textContent = 'сервер: переподключается…';
     var s = document.getElementById('status');
-    s.lastChild.textContent = ' сервер выключен — включи Mac хозяина';
+    s.lastChild.textContent = ' сервер переподключается — страница обновится сама (~15 сек)';
+    setTimeout(function () { location.reload(); }, 15000);
   });
 </script>
 </body>
