@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#131722">
+<script>window.__TFSERVER__ = "https://telefamily.serveousercontent.com"; window.__TFSERVER2__ = "https://9a69ee6d51229a.lhr.life";</script>
+<title>TeleFamily — общение без границ</title>
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<!-- ================= АВТОРИЗАЦИЯ ================= -->
+<div id="auth" class="auth">
+  <div class="auth-bg"></div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M2.5 12.2 21 3.5c.8-.4 1.6.4 1.3 1.2l-3.4 15.5c-.3.9-1.3 1.1-2 .5l-4.6-4-2.6 2.7c-.5.5-1.4.3-1.6-.4l-.4-3.3L18 6.7 7.4 12.6l-4.6 1.4c-1 .3-1.5-.8-.3-1.8z"/></svg></div>
+      <div>
+        <h1>TeleFamily</h1>
+        <p>общение без границ — картинки, видео, голос и кружки</p>
+      </div>
+    </div>
+
+    <div class="tabs" id="authTabs">
+      <button class="tab active" data-tab="login">Вход</button>
+      <button class="tab" data-tab="register">Регистрация</button>
+      <button class="tab" data-tab="github">GitHub</button>
+    </div>
+
+    <form id="formLogin" class="auth-form">
+      <label>Юзернейм<input name="username" autocomplete="username" placeholder="например: alexey" required></label>
+      <label>Пароль<input name="password" type="password" autocomplete="current-password" placeholder="••••••" required></label>
+      <button class="btn primary big" type="submit">Войти</button>
+    </form>
+
+    <form id="formRegister" class="auth-form" hidden>
+      <label>Юзернейм<input name="username" autocomplete="username" placeholder="3+ символов: a-z, 0-9, _" required></label>
+      <label>Как тебя звать<input name="name" placeholder="Имя или ник" required></label>
+      <label>Пароль<input name="password" type="password" autocomplete="new-password" placeholder="минимум 4 символа" required></label>
+      <button class="btn primary big" type="submit">Создать аккаунт</button>
+      <p class="hint">Регистрируясь, ты становишься пользователем TeleFamily</p>
+    </form>
+
+    <form id="formGithub" class="auth-form" hidden>
+      <p class="hint">Введи свой логин на GitHub — мы проверим аккаунт и создадим профиль TeleFamily с твоим ником и аватаркой.</p>
+      <label>Логин GitHub<input name="github" placeholder="octocat" autocapitalize="none" required></label>
+      <button class="btn github big" type="submit">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        Продолжить с GitHub
+      </button>
+    </form>
+
+    <div id="authError" class="auth-error" hidden></div>
+  </div>
+</div>
+
+<!-- ================= ПРИЛОЖЕНИЕ ================= -->
+<div id="app" class="app" hidden>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="side-header">
+      <button class="icon-btn" id="btnMenu" title="Меню">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="brand"><span class="brand-mark">➤</span> TeleFamily</div>
+      <button class="icon-btn" id="btnNewChat" title="Новый чат">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" class="search-ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" placeholder="Поиск людей и чатов" autocomplete="off">
+    </div>
+
+    <div id="chatList" class="chat-list"></div>
+    <div id="peopleList" class="chat-list" hidden></div>
+
+    <button class="side-user" id="btnProfile">
+      <img id="myAvatar" class="avatar" alt="">
+      <span id="myName" class="side-user-name">…</span>
+      <span id="myBadge" class="badge-plus" hidden>PLUS</span>
+    </button>
+  </aside>
+
+  <main class="main">
+    <div id="emptyState" class="empty">
+      <div class="empty-logo">➤</div>
+      <h2>TeleFamily</h2>
+      <p>Выбери чат слева или начни новый.<br>Пиши, отправляй картинки, видео, голосовые и кружки.</p>
+    </div>
+
+    <section id="chatView" class="chat-view" hidden>
+      <header class="chat-header">
+        <button class="icon-btn back" id="btnBack" title="Назад">
+          <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <img id="chatAvatar" class="avatar" alt="">
+        <div class="chat-head-text" id="chatHead">
+          <div class="chat-title" id="chatTitle"></div>
+          <div class="chat-sub" id="chatSub"></div>
+        </div>
+        <div class="chat-actions">
+          <button class="icon-btn" id="btnCallAudio" title="Аудиозвонок" hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10a7 7 0 0 1-14 0"/><path d="M12 17v4M9 21h6"/></svg>
+          </button>
+          <button class="icon-btn" id="btnCallVideo" title="Видеозвонок" hidden>
+            <svg viewBox="0 0 24 24"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="m22 8-7 4 7 4z"/></svg>
+          </button>
+          <button class="icon-btn" id="btnChatInfo" title="Информация">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages"></div>
+      <div id="typingBar" class="typing-bar" hidden></div>
+      <div id="replyBar" class="reply-bar" hidden>
+        <div class="reply-info"><b id="replyName"></b><span id="replyText"></span></div>
+        <button class="icon-btn" id="btnCancelReply"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <footer class="composer">
+        <button class="icon-btn" id="btnAttach" title="Прикрепить">
+          <svg viewBox="0 0 24 24"><path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 0 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 0 1-2.59-2.6l8.49-8.48"/></svg>
+        </button>
+        <input type="file" id="fileImage" accept="image/*" hidden>
+        <input type="file" id="fileVideo" accept="video/*" hidden>
+        <input type="file" id="fileAny" hidden>
+
+        <div class="input-wrap">
+          <textarea id="input" rows="1" placeholder="Сообщение"></textarea>
+          <button class="icon-btn emoji-btn" id="btnEmoji" title="Эмодзи">😊</button>
+        </div>
+
+        <button class="icon-btn" id="btnCam" title="Видеосообщение (кружок)">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+        </button>
+        <button class="icon-btn" id="btnMic" title="Голосовое сообщение">
+          <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button class="icon-btn send-btn" id="btnSend" title="Отправить">
+          <svg viewBox="0 0 24 24"><path d="M3 11.5 21 3l-4 18-5.5-5.5L3 11.5zM9.5 15.5 21 3"/></svg>
+        </button>
+      </footer>
+
+      <div id="recBar" class="rec-bar" hidden>
+        <span class="rec-dot"></span><span id="recTime">0:00</span>
+        <span class="rec-hint" id="recHint">идёт запись…</span>
+        <button class="btn ghost" id="btnRecCancel">Отмена</button>
+        <button class="btn primary" id="btnRecSend">Отправить</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ================= МЕНЮ ================= -->
+<div id="menuDrawer" class="drawer" hidden>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <img id="menuAvatar" class="avatar big" alt="">
+      <div><div id="menuName" class="drawer-name"></div><div id="menuNick" class="drawer-nick"></div></div>
+    </div>
+    <button class="drawer-item" data-act="profile">👤 Мой профиль</button>
+    <button class="drawer-item" data-act="plus">💳 Тарифы и подписка</button>
+    <button class="drawer-item" data-act="group">👥 Новая группа</button>
+    <button class="drawer-item" data-act="server" id="menuItemServer" hidden>🌐 Адрес сервера</button>
+    <button class="drawer-item" data-act="clips" id="menuItemClips" hidden>🎬 Клипы</button>
+    <button class="drawer-item" data-act="theme">🌗 Сменить тему</button>
+    <button class="drawer-item" data-act="help">💡 Помощь</button>
+    <button class="drawer-item danger" data-act="logout">🚪 Выйти</button>
+  </div>
+</div>
+
+<!-- ================= МОДАЛКИ ================= -->
+<div id="modalRoot" class="modal-root" hidden>
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<!-- запись кружка -->
+<div id="videoRec" class="videorec" hidden>
+  <video id="videoPreview" autoplay muted playsinline></video>
+  <div class="videorec-ring"></div>
+  <div class="videorec-time" id="videoRecTime">0:00</div>
+  <div class="videorec-actions">
+    <button class="btn ghost" id="btnVideoCancel">Отмена</button>
+    <button class="btn primary" id="btnVideoSend">Отправить</button>
+  </div>
+</div>
+
+<!-- просмотр медиа -->
+<div id="mediaViewer" class="viewer" hidden><button class="viewer-close" id="viewerClose">✕</button><div id="viewerBody"></div></div>
+
+<!-- ================= ЗВОНОК ================= -->
+<div id="callRoot" class="call-root" hidden>
+  <div class="call-stage" id="callStage">
+    <video id="callRemote" class="call-remote" autoplay playsinline></video>
+    <div class="call-ava" id="callAvatar"></div>
+    <video id="callLocal" class="call-local" autoplay playsinline muted hidden></video>
+    <div class="call-grid" id="callGrid" hidden></div>
+    <div class="call-screen-badge" id="callScreenBadge" hidden>🖥 Экран в эфире</div>
+  </div>
+  <div class="call-head">
+    <div class="call-name" id="callName"></div>
+    <div class="call-state" id="callState"></div>
+    <div class="call-time" id="callTime" hidden>0:00</div>
+  </div>
+  <div class="call-btns">
+    <button class="cc-btn" id="ccMic" title="Микрофон">🎤</button>
+    <button class="cc-btn" id="ccCam" title="Камера">📷</button>
+    <button class="cc-btn" id="ccScreen" title="Показать экран">🖥</button>
+    <button class="cc-btn cc-end" id="ccEnd" title="Завершить звонок">📵</button>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="./app.js"></script>
+</body>
+</html>
