@@ -1374,7 +1374,7 @@ function msgHTML(m, gap) {
   if (m.deleted) inner += `<div class="msg-text">🗑 Сообщение удалено</div>`;
   else {
     if (reply) inner += `<div class="reply-quote" data-goto="${reply.id}"><b>${esc(reply.authorName)}</b>${esc((reply.text || ({ image: 'Фото', video: 'Видео', voice: 'Голосовое', videonote: 'Кружок', file: 'Файл', call: '📞 Звонок' }[reply.type] || '')).slice(0, 80))}</div>`;
-    if (m.type === 'image') inner += `<div class="msg-media" data-view="${esc(m.url)}"><img src="${esc(m.url)}" loading="lazy" alt=""></div>`;
+    if (m.type === 'image') inner += `<div class="msg-media" data-view="${esc(m.url)}"><img src="${esc(m.url)}" alt=""></div>`;
     else if (m.type === 'video') inner += `<div class="msg-media" data-viewvideo="${esc(m.url)}"><video src="${esc(m.url)}" controls preload="metadata"></video></div>`;
     else if (m.type === 'videonote') inner += `<div class="videonote" data-viewvideo="${esc(m.url)}"><video src="${esc(m.url)}" muted playsinline preload="metadata"></video><div class="note-play">▶</div></div>`;
     else if (m.type === 'voice') inner += voiceHTML(m);
