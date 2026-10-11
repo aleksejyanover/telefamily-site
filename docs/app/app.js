@@ -1185,7 +1185,14 @@ function onCallEvent(m) {
   if (m.t === 'call_screen') {   /* собеседник начал/остановил трансляцию экрана */
     c.peerScreen = !!m.on;
     refreshScreenBadge();
-    if (m.on) toast('🖥 ' + c.peerName + ' показывает экран');
+    if (m.on) {
+      $('callRoot').classList.remove('audio-only');   /* трансляция видна даже в аудио-звонке */
+      $('callAvatar').hidden = true;
+      toast('🖥 ' + c.peerName + ' показывает экран');
+    } else if (!c.group && !(c.local && c.local.getVideoTracks().length)) {
+      $('callRoot').classList.add('audio-only');      /* трансляция кончилась — назад аудио-вид */
+      $('callAvatar').hidden = false;
+    }
     return;
   }
   if (m.t === 'call_reject') { endCall('Звонок отклонён', { send: false, logMissed: c.role === 'caller' }); return; }
@@ -1274,7 +1281,7 @@ $('ccScreen').onclick = async () => {
   const c = state.call; if (!c) return;
   if (c.screen) { stopScreenShare(); toast('🖥 Трансляция остановлена'); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    toast('Этот браузер не умеет транслировать экран — попробуй на компьютере', true); return;
+    toast('📱 На телефонах показывать экран пока нельзя — это запрет самих браузеров (и iPhone, и Android), транслировать умеют только компьютеры. А чужую трансляцию с телефона смотреть — можно.', true); return;
   }
   let s;
   try { s = await navigator.mediaDevices.getDisplayMedia({ video: true }); }
