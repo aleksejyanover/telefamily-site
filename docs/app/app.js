@@ -223,6 +223,99 @@ function fixU(o) {
   return o;
 }
 
+/* ---- потеря связи: баннер и фоновое восстановление (связь возвращается сама) ---- */
+let tfOffline = false, tfOfflineT = null;
+function tfBanner(on) {
+  let b = document.getElementById('tfOffline');
+  if (!b) {
+    if (!on) return;
+    b = document.createElement('div');
+    b.id = 'tfOffline';
+    b.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99999;' +
+      'background:#1b2436;color:#ffd166;border:1px solid #33415f;border-radius:14px;' +
+      'padding:9px 18px;font:600 14px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none';
+    (document.body || document.documentElement).appendChild(b);
+  }
+  b.textContent = '📡 Переподключаюсь…';
+  b.style.display = on ? 'block' : 'none';
+}
+function tfGoOffline() {
+  if (tfOffline) return;
+  tfOffline = true;
+  tfBanner(true);
+  const tick = async () => {
+    tfOfflineT = null;
+    try {
+      if (await tfRecover()) {
+        if (!IS_APP) { tfGoOnline(); return; }   /* браузер сам переехал на живую дверь */
+        await api('GET', '/api/ping');           /* успех → api() вызовет tfGoOnline */
+        return;
+      }
+    } catch (e) {}
+    if (tfOffline) tfOfflineT = setTimeout(tick, 4000);   /* не сдаёмся — пробуем каждые 4 секунды */
+  };
+  tfOfflineT = setTimeout(tick, 1500);
+}
+function tfGoOnline() {
+  if (!tfOffline) return;
+  tfOffline = false;
+  if (tfOfflineT) { clearTimeout(tfOfflineT); tfOfflineT = null; }
+  tfBanner(false);
+  toast('✅ Связь восстановлена');
+  try { connectWS(); } catch (e) {}
+  loadChats().catch(() => {});
+  if (state.current) openChat(state.current).catch(() => {});
+}
+
+/* ---- фон на Android: живой сервис уведомлений — сообщения и звонки приходят
+   даже когда приложение закрыто (кнопки «Ответить/Отклонить» в уведомлении) ---- */
+function tfPush() { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TfPush; } catch (e) { return null; } }
+function tfPushSync() {
+  if (!IS_APP || !state.token || !state.me) return;
+  const p = tfPush(); if (!p) return;
+  try {
+    p.configure({ server: apiBase() || window.__TFSERVER__ || '', token: state.token, userId: String(state.me.id) });
+    p.setForeground({ on: !document.hidden });
+    p.askNotify({});
+  } catch (e) {}
+}
+function tfPushOff() { const p = tfPush(); if (p) try { p.stop({}); } catch (e) {} }
+function tfPushFg() { const p = tfPush(); if (p) try { p.setForeground({ on: !document.hidden }); } catch (e) {} }
+async function tfPushPending() {
+  const p = tfPush(); if (!p || !state.me) return;
+  let a = null;
+  try { const r = await p.takePending({}); a = r && r.value; } catch (e) {}
+  if (!a || !a.action || !a.chatId) return;
+  try {
+    if (!state.chatById[a.chatId]) await loadChats();
+    if (!state.chatById[a.chatId]) return;
+    if (a.action === 'answer') await autoAnswerCall(a);              /* нажали «Ответить» в уведомлении */
+    else if (a.action === 'call') {                                  /* «Позвонить» из пропущенного */
+      await openChat(a.chatId);
+      setTimeout(() => startCall(!!a.video), 400);
+    }
+    else if (a.action === 'open') await openChat(a.chatId);          /* открыли уведомление о сообщении */
+  } catch (e) {}
+}
+async function autoAnswerCall(p) {
+  if (state.call) {
+    if (state.call.chatId !== p.chatId) { wsSend({ t: 'call_busy', chatId: p.chatId, reason: 'Занято' }); toast('Уже идёт другой звонок', true); }
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Звонки не поддерживаются на этом устройстве', true); return; }
+  const chat = state.chatById[p.chatId];
+  const peer = callPeerOf(chat);
+  state.call = {
+    chatId: p.chatId, peerName: (peer && peer.name) || (chat ? chat.title : 'Звонок'),
+    role: 'callee', video: !!p.video, cam: !!p.video, mic: true,
+    offerSdp: p.sdp, local: null, pc: null, connectedAt: 0, state: 'ringing',
+    readyNeg: false, negT: false, dialT: null, ringT: null, timer: null, pendingIce: [],
+  };
+  await acceptCall();
+}
+document.addEventListener('visibilitychange', () => { tfPushFg(); if (!document.hidden) tfPushPending(); });
+
 async function api(method, path, body) {
   const reqId = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const opt = {
@@ -230,7 +323,7 @@ async function api(method, path, body) {
     headers: { Authorization: 'Bearer ' + state.token, 'X-Req-Id': reqId },
   };
   if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 12; attempt++) {
     let r;
     try {
       const ctrl = new AbortController();
@@ -238,21 +331,25 @@ async function api(method, path, body) {
       try { r = await fetch(apiBase() + path, Object.assign({}, opt, { signal: ctrl.signal })); }
       finally { clearTimeout(to); }
     } catch (e) {
-      /* адрес умер — ищем живой через GitHub и повторяем */
+      /* адрес умер — ищем живой через GitHub и повторяем; если не вышло — фон долбит сам */
       if (await tfRecover()) { await sleep(300); continue; }
-      throw new Error('Нет связи с сервером — проверь интернет и повтори через минуту');
+      if (attempt < 4) { await sleep(1200); continue; }
+      tfGoOffline();
+      throw new Error('📡 Переподключаюсь…');
     }
     if (r.status === 401 && path !== '/api/login' && path !== '/api/register' && path !== '/api/github') { if (state.me) forgetAccount(state.me.username); logout(true); throw new Error('session'); }
-    if (!r.ok && (r.status === 502 || r.status === 503 || r.status === 504) && attempt < 7) {
+    if (!r.ok && (r.status === 502 || r.status === 503 || r.status === 504) && attempt < 8) {
       await sleep(2000); /* туннель/сервер переподключается — ждём и повторяем (X-Req-Id защитит от дублей) */
       continue;
     }
     let data = {};
     try { data = fixU(await r.json()); } catch (e) {}
     if (!r.ok) throw new Error(data.error || 'Ошибка ' + r.status);
+    if (tfOffline) tfGoOnline();
     return data;
   }
-  throw new Error('Сервер пока не отвечает — повтори через минуту');
+  tfGoOffline();
+  throw new Error('📡 Переподключаюсь…');
 }
 async function upload(file) {
   const doFetch = () => fetch(apiBase() + '/api/upload', {
@@ -263,7 +360,7 @@ async function upload(file) {
   let r;
   try { r = await doFetch(); }
   catch (e) {
-    if (!(await tfRecover())) throw new Error('Сервер недоступен — повтори через минуту');
+    if (!(await tfRecover())) { tfGoOffline(); throw new Error('📡 Переподключаюсь…'); }
     r = await doFetch();
   }
   const data = await r.json().catch(() => ({}));
@@ -326,6 +423,7 @@ $('formGithub').addEventListener('submit', async e => {
 });
 
 function logout(silent) {
+  tfPushOff();
   localStorage.removeItem('tg_token');
   try { localStorage.removeItem('tf_last'); } catch (e) {}
   state.token = null; state.me = null;
@@ -402,7 +500,7 @@ async function startApp() {
     }
     /* НЕТ СВЯЗИ — не выкидываем, показываем приложение и пробуем снова */
     $('auth').hidden = true; $('app').hidden = false;
-    if (!startApp._warned) { startApp._warned = 1; toast('Нет связи с сервером — подключаемся…', true); }
+    if (!startApp._warned) { startApp._warned = 1; toast('📡 Нет связи — подключаемся…', true); }
     setTimeout(() => { if (state.token) startApp(); }, 4000);
     return;
   }
@@ -411,6 +509,7 @@ async function startApp() {
   renderMe();
   await loadChats();
   connectWS();
+  tfPushSync(); tfPushPending();   /* фоновый сервис: уведомления и звонки даже с закрытым приложением */
 }
 
 function renderMe() {
@@ -698,7 +797,7 @@ async function startCall(video) {
   if (state.call) { toast('Уже идёт звонок', true); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Звонки не поддерживаются на этом устройстве', true); return; }
   const peer = callPeerOf(chat);
-  if (peer && !peer.online) { toast('Собеседник не в сети', true); return; }
+  const peerOffline = peer && !peer.online;   /* звонить можно и не в сети — собеседнику придёт уведомление */
   let local;
   try {
     local = await navigator.mediaDevices.getUserMedia({ audio: true, video: video ? { width: 1280, height: 720, facingMode: 'user' } : false });
@@ -718,6 +817,7 @@ async function startCall(video) {
   openCallWindow();
   ringStart('out');
   setCallState('Идёт вызов…');
+  if (peerOffline) { toast('📵 Собеседник не в сети — придёт уведомление'); setCallState('Не в сети — уведомим…'); }
   c.dialT = setTimeout(() => {
     if (state.call === c && c.state === 'dialing') endCall('Никто не ответил', { logMissed: true });
   }, 45000);
@@ -1042,6 +1142,7 @@ function onCallEvent(m) {
   if (m.t === 'call_invite') return onCallInvite(m);
   if (m.t === 'call_gstart') return onGroupCallStart(m);
   if (!c || c.chatId !== m.chatId) return;
+  if (m.t === 'call_offline') { setCallState('📵 Не в сети — уведомим, когда появится'); return; }
   if (c.group) return onGroupCallEvent(m, c);
   if (m.t === 'call_answer') {
     if (!c.pc) {   /* принято на другом устройстве — замолкаем */
@@ -1213,6 +1314,13 @@ $('ccScreen').onclick = async () => {
 };
 
 function handleEvent(m) {
+  if (m.t === 'pending_calls') {
+    (m.calls || []).forEach(p => {
+      const name = p.fromName || 'Кто-то';
+      toast((p.kind === 'group' ? '👥 Пропущенный групповой звонок: ' : '🔕 Пропущенный звонок: ') + name, true);
+    });
+    return;
+  }
   if (typeof m.t === 'string' && m.t.indexOf('call_') === 0) { onCallEvent(m); return; }
   if (m.t === 'msg') {
     const chat = state.chatById[m.chatId];
