@@ -549,12 +549,3 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .clip-float.pop { animation: heartPop .8s ease; }
 @keyframes heartPop { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.3) } 25% { opacity: 1; transform: translate(-50%,-50%) scale(1.15) } 60% { opacity: 1; transform: translate(-50%,-55%) scale(1) } 100% { opacity: 0; transform: translate(-50%,-70%) scale(.9) } }
 .clip-stage.need-play::after { content: '▶'; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 64px; color: rgba(255,255,255,.9); background: rgba(0,0,0,.45); width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; border-radius: 50%; pointer-events: none; z-index: 3; }
-
-/* кнопка «Сохранить» — под видео в чате и в просмотрщике фото */
-.viewer-save {
-  display: flex; gap: 6px; align-items: center; justify-content: center;
-  margin: 12px auto 0; padding: 11px 26px; border: 0; border-radius: 14px;
-  background: var(--accent); color: #fff; cursor: pointer;
-  font: 600 15px/1 -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-.viewer-save:active { opacity: .8; }
