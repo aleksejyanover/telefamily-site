@@ -1483,10 +1483,10 @@ function msgHTML(m, gap) {
   else {
     if (reply) inner += `<div class="reply-quote" data-goto="${reply.id}"><b>${esc(reply.authorName)}</b>${esc((reply.text || ({ image: 'Фото', video: 'Видео', voice: 'Голосовое', videonote: 'Кружок', file: 'Файл', call: '📞 Звонок' }[reply.type] || '')).slice(0, 80))}</div>`;
     if (m.type === 'image') inner += `<div class="msg-media" data-view="${esc(m.url)}"><img src="${esc(m.url)}" alt=""></div>`;
-    else if (m.type === 'video') inner += `<div class="msg-media" data-viewvideo="${esc(m.url)}"><video src="${esc(m.url)}" controls preload="metadata"></video></div>`;
+    else if (m.type === 'video') inner += `<div class="msg-media" data-viewvideo="${esc(m.url)}"><video src="${esc(m.url)}" controls preload="metadata"></video>` + viewerSaveBtn(m.url, 'видео.mp4') + `</div>`;
     else if (m.type === 'videonote') inner += `<div class="videonote" data-viewvideo="${esc(m.url)}"><video src="${esc(m.url)}" muted playsinline preload="metadata"></video><div class="note-play">▶</div></div>`;
     else if (m.type === 'voice') inner += voiceHTML(m);
-    else if (m.type === 'file') inner += `<a class="file-chip" href="${esc(m.url)}" download="${esc(m.fileName || 'file')}"><span class="file-ico">📄</span><span><span class="file-name">${esc(m.fileName || 'Файл')}</span><br><span class="file-size">${fmtSize(m.fileSize)}</span></span></a>`;
+    else if (m.type === 'file') inner += `<a class="file-chip" href="${esc(m.url)}" download="${esc(m.fileName || 'file')}"><span class="file-ico">📄</span><span><span class="file-name">${esc(m.fileName || 'Файл')}</span><br><span class="file-size">${fmtSize(m.fileSize)} · нажми, чтобы сохранить</span></span></a>`;
     else if (m.type === 'call') inner += `<div class="msg-call">📞 ${esc(m.text || 'Звонок')}</div>`;
     if (m.text) inner += `<div class="msg-text">${linkify(m.text)}</div>`;
   }
@@ -1657,11 +1657,15 @@ $('messages').addEventListener('click', async e => {
   }
   const voice = e.target.closest('[data-voice]');
   if (voice && e.target.closest('.play-btn')) return toggleVoice(voice);
+  const sv = e.target.closest('[data-save]');
+  if (sv) { e.preventDefault(); e.stopPropagation(); return saveMedia(sv.dataset.save, sv.dataset.name); }
+  const chip = e.target.closest('.file-chip');
+  if (chip) { e.preventDefault(); return saveMedia(chip.getAttribute('href'), chip.getAttribute('download')); }
   const view = e.target.closest('[data-view]');
-  if (view) return showViewer(`<img src="${view.dataset.view}">`);
+  if (view) return showViewer(`<img src="${view.dataset.view}">` + viewerSaveBtn(view.dataset.view, (decodeURIComponent(view.dataset.view.split('/').pop() || '')).split('?')[0] || 'фото'));
   const viewV = e.target.closest('[data-viewvideo]');
   if (viewV && !e.target.closest('video, .play-btn')) return;
-  if (viewV && e.target.closest('.note-play')) return showViewer(`<video src="${viewV.dataset.viewvideo}" controls autoplay>`);
+  if (viewV && e.target.closest('.note-play')) return showViewer(`<video src="${viewV.dataset.viewvideo}" controls autoplay>` + viewerSaveBtn(viewV.dataset.viewvideo, 'видео.mp4'));
   const react = e.target.closest('[data-react]');
   if (react) return addReaction(msgEl.dataset.id, react.dataset.react);
   const tool = e.target.closest('[data-act]');
@@ -1676,6 +1680,33 @@ function toggleVoice(box) {
       .catch(() => toast('Не удалось воспроизвести', true));
     audio.onended = () => { btn.textContent = '▶'; box.querySelector('.voice-time').textContent = fmtDur(audio.duration || 0); };
   } else { audio.pause(); btn.textContent = '▶'; }
+}
+/* сохранение присланных файлов: на телефоне — системное меню «Сохранить/Поделиться»,
+   на компьютере — обычное скачивание (blob, чтобы работало и с чужого адреса) */
+async function saveMedia(url, name) {
+  try {
+    const r = await fetch(fixU(url));
+    if (!r.ok) throw new Error('bad');
+    const b = await r.blob();
+    const fname = name || (decodeURIComponent(url.split('/').pop() || 'file').split('?')[0]) || 'file';
+    try {
+      const f = new File([b], fname, { type: b.type || 'application/octet-stream' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        await navigator.share({ files: [f], title: fname });
+        return;
+      }
+    } catch (e) { /* меню закрыли — попробуем скачать напрямую */ }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  } catch (e) { toast('Не получилось сохранить — попробуй ещё раз', true); }
+}
+function viewerSaveBtn(url, name) {
+  return `<button class="viewer-save" data-save="${esc(url)}" data-name="${esc(name)}">⬇️ Сохранить</button>`;
 }
 function showViewer(html) {
   $('viewerBody').innerHTML = html;
