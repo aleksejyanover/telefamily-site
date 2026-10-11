@@ -338,6 +338,11 @@ async function api(method, path, body) {
       throw new Error('📡 Переподключаюсь…');
     }
     if (r.status === 401 && path !== '/api/login' && path !== '/api/register' && path !== '/api/github') { if (state.me) forgetAccount(state.me.username); logout(true); throw new Error('session'); }
+    const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+    if (ct.indexOf('text/html') >= 0 && attempt < 8) {
+      await sleep(2000); /* вместо ответа сервера пришла страница-предупреждение туннеля — ждём и повторяем */
+      continue;
+    }
     if (!r.ok && (r.status === 502 || r.status === 503 || r.status === 504) && attempt < 8) {
       await sleep(2000); /* туннель/сервер переподключается — ждём и повторяем (X-Req-Id защитит от дублей) */
       continue;
