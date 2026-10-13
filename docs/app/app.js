@@ -523,6 +523,7 @@ function renderMe() {
   $('myBadge').hidden = !m.premium;
   $('myBadge').textContent = m.owner ? 'OWNER' : (PLAN_LABEL[m.plan] || 'ПЛЮС').toUpperCase();
   if ($('menuItemServer')) $('menuItemServer').hidden = !IS_APP;
+  if ($('menuItemAdmin')) $('menuItemAdmin').hidden = !(state.me && state.me.owner);   /* 👑 только для владельца */
   $('menuName').textContent = m.name || m.username;
   $('menuNick').textContent = '@' + m.username + (m.owner ? ' · 👑 Владелец'
     : (m.premium ? ' · тариф «' + (PLAN_LABEL[m.plan] || 'Плюс') + '»' : ''));
@@ -1903,6 +1904,7 @@ $('menuDrawer').addEventListener('click', e => {
   if (act === 'help') helpModal();
   if (act === 'server') serverModal();
   if (act === 'clips') openClips();
+  if (act === 'admin') openAdmin();
   if (act === 'logout') logout();
 });
 function serverModal() {
@@ -2515,3 +2517,138 @@ document.head.appendChild(extraStyle);
   if (!state.token) { $('auth').hidden = false; return; }
   startApp();
 })();
+
+/* ------------------------------------------- 👑 ПАНЕЛЬ ВЛАДЕЛЬЦА */
+let adminTab = 'people', adminData = null, adminEl = null;
+
+function closeAdmin() { if (adminEl) { adminEl.remove(); adminEl = null; } }
+
+async function openAdmin() {
+  if (!state.me || !state.me.owner) { toast('Только для владельца 👑', true); return; }
+  if (adminEl) return;
+  const el = adminEl = document.createElement('div');
+  el.className = 'admin-root';
+  el.innerHTML = `
+    <div class="admin-card">
+      <div class="admin-head">
+        <b class="admin-title">👑 Панель владельца</b>
+        <div class="admin-tabs">
+          <button data-tab="people" class="on">Люди</button>
+          <button data-tab="chats">Переписка</button>
+          <button data-tab="feed">Лента</button>
+          <button data-tab="tests">Тесты</button>
+        </div>
+        <button class="admin-x">✕</button>
+      </div>
+      <div class="admin-body"><div class="admin-load">Загружаю…</div></div>
+    </div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', async e => {
+    if (e.target.closest('.admin-x')) { closeAdmin(); return; }
+    const tb = e.target.closest('[data-tab]');
+    if (tb) {
+      adminTab = tb.dataset.tab;
+      el.querySelectorAll('.admin-tabs button').forEach(b => b.classList.toggle('on', b === tb));
+      renderAdmin(); return;
+    }
+    if (e.target.closest('[data-back]')) { adminTab = 'chats';
+      el.querySelectorAll('.admin-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === 'chats'));
+      renderAdmin(); return; }
+    const row = e.target.closest('[data-chat]');
+    if (row) { openAdminChat(row.dataset.chat, row.dataset.title); return; }
+    const pw = e.target.closest('[data-pw]');
+    if (pw) { changePw(pw.dataset.pw, pw.dataset.username); return; }
+    if (e.target.closest('#adminRerun')) { runAdminTests(); return; }
+  });
+  await loadAdmin();
+}
+
+async function loadAdmin() {
+  try {
+    adminData = await api('GET', '/api/admin/summary');
+    renderAdmin();
+  } catch (e) { const b = document.querySelector('.admin-body'); if (b) b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
+}
+
+function adminWhen(t) {
+  if (!t) return '—';
+  const diff = Date.now() - t;
+  if (diff < 3 * 60000) return 'только что';
+  if (diff < 3600e3) return Math.round(diff / 60000) + ' мин назад';
+  return new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function adminBody() { return document.querySelector('.admin-body'); }
+
+function renderAdmin() {
+  const b = adminBody(); if (!b || !adminData) return;
+  if (adminTab === 'people') {
+    b.innerHTML = `<div class="admin-note">👥 ${adminData.users.length} людей · 🟢 сейчас онлайн: ${adminData.online}</div>` +
+      adminData.users.map(u => `
+      <div class="admin-row">
+        <span class="admin-dot ${u.online ? 'on' : ''}"></span>
+        <span class="admin-who"><b>${esc(u.name)}</b> <i>@${esc(u.username)}</i>${u.role === 'owner' ? ' 👑' : ''}${u.role === 'bot' ? ' 🤖' : ''}<br><small>${u.online ? '🟢 в сети' : 'был(а) ' + adminWhen(u.lastSeen)} · чатов: ${u.dms}</small></span>
+        <span class="admin-pw">${u.pw ? `<code>${esc(u.pw)}</code>` : '<span class="admin-nopw">пароль неизвестен</span>'}</span>
+        <button class="admin-btn" data-pw="${esc(u.id)}" data-username="${esc(u.username)}">🔑 Сменить</button>
+      </div>`).join('');
+    return;
+  }
+  if (adminTab === 'chats') {
+    b.innerHTML = `<div class="admin-note">💬 ${adminData.chats.length} чатов — нажми, чтобы прочитать переписку</div>` +
+      adminData.chats.map(c => `
+      <div class="admin-row admin-chat" data-chat="${esc(c.id)}" data-title="${esc(c.title)}">
+        <span class="admin-who"><b>${esc(c.title)}</b> <i>${c.type === 'group' ? '👥 группа' : esc(c.members.join(' · '))}</i><br><small>${esc((c.last && c.last.text) || 'пусто')}</small></span>
+        <span class="admin-cnt">${c.count}</span>
+      </div>`).join('');
+    return;
+  }
+  if (adminTab === 'feed') {
+    b.innerHTML = `<div class="admin-note">📡 Последнее в мессенджере — что и где происходит</div>` +
+      adminData.feed.map(f => `
+      <div class="admin-row">
+        <span class="admin-when">${f.at ? adminWhen(f.at) : '—'}</span>
+        <span class="admin-who"><b>${esc(f.author)}</b> → ${esc(f.chat)}<br><small>${esc(f.text)}</small></span>
+      </div>`).join('');
+    return;
+  }
+  if (adminTab === 'tests') runAdminTests();
+}
+
+async function openAdminChat(id, title) {
+  const b = adminBody();
+  b.innerHTML = '<div class="admin-load">Читаю «' + esc(title) + '»…</div>';
+  try {
+    const d = await api('GET', '/api/admin/chat?id=' + encodeURIComponent(id));
+    b.innerHTML = `<div class="admin-center"><button class="admin-btn" data-back="1">← К списку чатов</button></div>` +
+      (d.messages.length ? d.messages.map(m => `
+      <div class="admin-msg">
+        <b>${esc(m.authorName)}</b> <span class="admin-when">${adminWhen(m.createdAt)}</span>
+        <div>${esc(m.text || (m.type === 'image' ? '📷 Фото' : m.type === 'video' ? '🎥 Видео' : m.type === 'voice' ? '🎤 Голосовое' : m.type === 'file' ? '📄 ' + (m.fileName || 'Файл') : m.type || ''))}</div>
+      </div>`).join('') : '<div class="admin-load">Сообщений нет</div>');
+  } catch (e) { b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
+}
+
+async function changePw(userId, username) {
+  const pw = prompt('Новый пароль для @' + username + ' (от 4 символов):');
+  if (!pw) return;
+  try {
+    const d = await api('POST', '/api/admin/password', { userId, password: pw });
+    toast('🔑 Пароль @' + username + ': ' + d.pw);
+    await loadAdmin();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function runAdminTests() {
+  const b = adminBody(); if (!b) return;
+  b.innerHTML = '<div class="admin-load">🔍 Проверяю сервер, базу, входы и связь…</div>';
+  try {
+    const d = await api('POST', '/api/admin/tests', {});
+    b.innerHTML = `<div class="admin-note ${d.passed === d.total ? 'ok' : 'warn'}">${d.passed === d.total ? '✅ Всё работает' : '⚠ Есть замечания'}: ${d.passed} / ${d.total}</div>` +
+      d.tests.map(x => `
+      <div class="admin-row">
+        <span class="admin-dot ${x.ok ? 'on' : 'bad'}"></span>
+        <span class="admin-who"><b>${esc(x.name)}</b><br><small>${esc(x.info)}</small></span>
+        <span class="admin-verdict">${x.ok ? '✓' : '✗'}</span>
+      </div>`).join('') +
+      '<div class="admin-center"><button class="admin-btn big" id="adminRerun">🔁 Запустить ещё раз</button></div>';
+  } catch (e) { b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
+}
