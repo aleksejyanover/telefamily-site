@@ -2093,6 +2093,10 @@ $('btnVideoSend').onclick = () => { clearInterval(window._videoTimer); try { vid
 
 /* -------------------------------------------------------------- меню */
 $('btnMenu').onclick = () => { $('menuDrawer').hidden = false; };
+/* установка как приложение (PWA): Edge/Chrome дают «родную» установку,
+ * событие ловим — пункт меню ставит приложение одним нажатием */
+let tfInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); tfInstallPrompt = e; });
 $('menuDrawer').addEventListener('click', e => {
   if (e.target === $('menuDrawer')) { $('menuDrawer').hidden = true; return; }
   const item = e.target.closest('.drawer-item'); if (!item) return;
@@ -2100,6 +2104,10 @@ $('menuDrawer').addEventListener('click', e => {
   const act = item.dataset.act;
   if (act === 'profile') profileModal();
   if (act === 'plus') premiumModal();
+  if (act === 'installapp') {
+    if (tfInstallPrompt) { tfInstallPrompt.prompt(); tfInstallPrompt = null; }
+    else toast('В Edge или Chrome: меню ⋯ → «Приложения» → «Установить TeleFamily». На Windows 🪟 — на сайте нажми «Скачать для Windows»: лаунчер сам поставит ярлык на рабочий стол');
+  }
   if (act === 'group') groupModal();
   if (act === 'channel') channelModal();
   if (act === 'theme') {

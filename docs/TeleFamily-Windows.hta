@@ -1,0 +1,103 @@
+<html>
+<head>
+<title>TeleFamily для Windows</title>
+<hta:application id="tf" applicationName="TeleFamily" border="dialog" singleInstance="yes" maximizeButton="no" minimizeButton="no" showTaskbar="yes" windowState="normal" innerBorder="yes"/>
+<meta charset="utf-8">
+<style>
+ body{font-family:'Segoe UI',sans-serif;background:#0b1120;color:#e5edff;margin:0;padding:18px;text-align:center;user-select:none}
+ h1{font-size:17px;margin:4px 0 8px}
+ p#status{font-size:13px;color:#c3d2f0;line-height:1.5;margin:8px 0}
+ #log{border:1px solid #22304d;border-radius:10px;padding:10px 12px;margin:10px 0;text-align:left;font-size:12px;color:#9fb0d0;white-space:pre-line;min-height:34px}
+ .ok{color:#4ade80}.err{color:#ff8b8b}
+ button{margin-top:8px;padding:8px 26px;border-radius:9px;border:0;background:#4285f4;color:#fff;font-size:13px;cursor:pointer}
+ button:hover{background:#5a93f7}
+</style>
+</head>
+<body>
+<h1>🪟 Установка TeleFamily на Windows</h1>
+<p id="status">Готовим ярлык…</p>
+<div id="log"></div>
+<button onclick="window.close()">Готово</button>
+
+<script language="JScript">
+/* вечный адрес приложения (GitHub Pages хаб → приложение в своём окне) */
+var APP_URL = "https://aleksejyanover.github.io/telefamily-site/app/?app=1";
+var sh = null, fso = null, exe = null, lines = [];
+
+function say(t, cls) {
+  var el = document.getElementById('status');
+  el.innerText = t;
+  el.className = cls || '';
+}
+function add(t) { lines.push(t); document.getElementById('log').innerText = lines.join("\n"); }
+
+try {
+  sh = new ActiveXObject("WScript.Shell");
+  fso = new ActiveXObject("Scripting.FileSystemObject");
+} catch (e) {
+  say("Не удалось запустить установку", "err");
+  add("Нет WScript.Shell: " + e.message);
+}
+
+function firstExisting(list) {
+  for (var i = 0; i < list.length; i++) {
+    try { if (fso.FileExists(list[i])) return list[i]; } catch (e) {}
+  }
+  return null;
+}
+
+function mkLnk(dir) {
+  var lnk = sh.CreateShortcut(dir + "\\TeleFamily.lnk");
+  lnk.TargetPath = exe;
+  lnk.Arguments = "--app=\"" + APP_URL + "\"";
+  lnk.WorkingDirectory = fso.GetParentFolderName(exe);
+  lnk.IconLocation = exe + ",0";
+  lnk.Description = "TeleFamily — семейный мессенджер";
+  lnk.Save();
+}
+
+if (sh && fso) {
+  window.resizeTo(460, 330);
+
+  var pf   = sh.ExpandEnvironmentStrings("%ProgramFiles%");
+  var pfx86 = sh.ExpandEnvironmentStrings("%ProgramFiles(x86)%");
+  exe = firstExisting([
+    pf + "\\Microsoft\\Edge\\Application\\msedge.exe",
+    pfx86 + "\\Microsoft\\Edge\\Application\\msedge.exe"
+  ]);
+  if (exe) add("Браузер: Microsoft Edge (режим приложения)");
+  if (!exe) {
+    exe = firstExisting([
+      pf + "\\Google\\Chrome\\Application\\chrome.exe",
+      pfx86 + "\\Google\\Chrome\\Application\\chrome.exe"
+    ]);
+    if (exe) add("Браузер: Google Chrome (режим приложения)");
+  }
+
+  try {
+    if (exe) {
+      var desktop = sh.SpecialFolders("Desktop");
+      var programs = sh.SpecialFolders("Programs");
+      mkLnk(desktop);
+      mkLnk(programs);
+      say("Готово! TeleFamily установлен", "ok");
+      add("Ярлык на рабочем столе и в «Пуск»");
+      add("Запуск: двойной клик — откроется в своём окне, как обычное приложение");
+    } else {
+      /* ни Edge, ни Chrome — ставим обычный ярлык на адрес */
+      var url2 = sh.SpecialFolders("Desktop") + "\\TeleFamily.url";
+      var f = fso.CreateTextFile(url2, true);
+      f.WriteLine("[InternetShortcut]");
+      f.WriteLine("URL=" + APP_URL);
+      f.Close();
+      say("Готово! Ярлык TeleFamily — на рабочем столе", "ok");
+      add("Программы для режима приложения (Edge/Chrome) не найдены — ярлык откроет TeleFamily в браузере по умолчанию");
+    }
+  } catch (e) {
+    say("Ошибка установки", "err");
+    add(e.message);
+  }
+}
+</script>
+</body>
+</html>
