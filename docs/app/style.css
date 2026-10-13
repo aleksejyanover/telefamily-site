@@ -619,3 +619,22 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
 .up-member .avatar { width: 34px; height: 34px; font-size: 13px; }
 .up-mnick { color: var(--muted); font-size: 13px; margin-left: auto; flex: none; }
 .chat-head-text, #chatAvatar { cursor: pointer; }
+
+/* ---- реклама бесплатного тарифа (карточка в списке чатов + полоса над вводом) ---- */
+.ad-card {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px; padding: 10px 10px 10px 12px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,181,71,.12), rgba(66,133,244,.10));
+  cursor: pointer; font-size: 13px; line-height: 1.35;
+}
+.ad-card:active { transform: scale(.99); }
+.ad-tag {
+  flex: none; align-self: flex-start; margin-top: 2px;
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 2px 5px;
+}
+.ad-text { flex: 1; min-width: 0; }
+.ad-sub { color: var(--muted); font-size: 12px; }
+.ad-btn { flex: none; padding: 6px 10px; font-size: 12px; }
+.ad-bar .ad-card { margin: 6px 8px; padding: 8px 8px 8px 10px; }

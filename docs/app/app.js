@@ -4,7 +4,7 @@
 const $ = id => document.getElementById(id);
 
 const PLAN_LABEL = { free: 'Бесплатный', start: 'Старт', plus: 'Плюс', family: 'Семья', pro: 'Про' };
-const PLAN_SIZE  = { free: 25, start: 100, plus: 300, family: 300, pro: 512 };
+const PLAN_SIZE  = { free: 100, start: 1024, plus: 2048, family: 2048, pro: 5120 };
 const PLAN_PRICE = { free: 0, start: 99, plus: 199, family: 349, pro: 699 };
 
 function luhnValid(num) {
@@ -572,6 +572,29 @@ function previewText(c) {
   return who + body;
 }
 
+/* реклама на бесплатном тарифе: карточка в списке чатов и полоса над вводом */
+function showAds() { return !!(state.me && !state.me.premium); }
+function adCardHTML() {
+  if (!showAds()) return '';
+  const ads = [
+    ['📢 Хочешь <b>без рекламы</b>? Платные тарифы убирают её навсегда', 'Файлы до 5 ГБ, группы до 500 человек, все лимиты сняты'],
+    ['⬇️ На бесплатном файл — <b>максимум 100 МБ</b>', 'На «Старт» уже 1 ГБ, на «Про» — 5 ГБ'],
+    ['👥 Бесплатный: <b>3 чата и группы</b>, в группе до 10 человек', 'Тарифы «Старт», «Плюс», «Семья», «Про» снимают лимиты'],
+  ];
+  const a = ads[Math.floor(Date.now() / 3600000) % ads.length];
+  return `<div class="ad-card" data-ad="1">
+    <span class="ad-tag">реклама</span>
+    <span class="ad-text"><b>${a[0]}</b><br><span class="ad-sub">${a[1]}</span></span>
+    <button class="btn ghost ad-btn" data-ad-go="1">Тарифы</button>
+  </div>`;
+}
+function bindAdCards(root) {
+  /* одно делегирование на весь документ: карточка или кнопка → экран тарифов */
+  if (bindAdCards.done) return;
+  bindAdCards.done = true;
+  document.addEventListener('click', e => { if (e.target.closest('[data-ad]')) premiumModal(); });
+}
+bindAdCards();
 async function renderChatList() {
   sortChats();
   const q = $('search').value.trim().toLowerCase();
@@ -597,7 +620,7 @@ async function renderChatList() {
     }).join('')
     : `<div style="padding:26px 16px;color:var(--muted);text-align:center;font-size:14px;line-height:1.6">
       ${q ? 'Чатов не найдено' : 'Пока пусто.<br>Нажми <b>+</b> и найди друга по юзернейму,<br>или создай группу в меню ☰'}</div>`;
-  box.innerHTML = people + chatsHTML;
+  box.innerHTML = adCardHTML() + people + chatsHTML;
 }
 
 async function peopleHTML(qRaw) {
@@ -1534,6 +1557,9 @@ function renderChatSub() {
   /* в канале подписчики только читают — поле ввода скрыто */
   const comp = $('composer');
   if (comp) comp.hidden = c.type === 'channel' && !chatMod(c);
+  /* реклама бесплатного тарифа — полоса над полем ввода */
+  const ad = $('adBar');
+  if (ad) { const h = adCardHTML(); ad.innerHTML = h; ad.hidden = !h; }
   const typing = state.typing[c.id] || [];
   const sub = $('chatSub');
   if (typing.length) {
@@ -1803,7 +1829,7 @@ $('btnAttach').addEventListener('click', () => {
     <div class="list-scroll">
       <div class="search-result" data-a="image">🖼 <div><div class="sr-name">Картинку</div><div class="sr-nick">JPG, PNG, GIF, WebP</div></div></div>
       <div class="search-result" data-a="video">🎞 <div><div class="sr-name">Видео</div><div class="sr-nick">MP4, WebM</div></div></div>
-      <div class="search-result" data-a="file">📎 <div><div class="sr-name">Любой файл</div><div class="sr-nick">до 25 МБ (до 512 МБ на тарифах)</div></div></div>
+      <div class="search-result" data-a="file">📎 <div><div class="sr-name">Любой файл</div><div class="sr-nick">до 100 МБ (до 5 ГБ на платных тарифах)</div></div></div>
     </div>`);
   box.onclick = e => {
     const r = e.target.closest('.search-result'); if (!r) return;
@@ -2414,7 +2440,7 @@ function helpModal() {
       <div>🗑 <b>Удаление</b> — свои сообщения может удалить любой, чужие — владелец</div>
       <div>👥 <b>Группа</b> — меню ☰ → Новая группа; людей добавляй в ⓘ чата (➕), там же ✏️ и 🗑</div>
       <div>📢 <b>Канал</b> — меню ☰ → Новый канал: ты владелец, можешь назначить ⭐ админов; подписчики равны и только читают. Подписка: кнопка + → «К каналу»</div>
-      <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка</div>
+      <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка: на бесплатном — реклама, файлы до 100 МБ и группы до 10 человек; платные — без рекламы и с гигабайтами (до 5 ГБ)</div>
       <div>🤖 <b>Боты</b> — свой бот: найди в поиске @botfactory и напиши «Хочу создать бота»</div>
       <div>🤫 <b>Секрет</b> — говорят, если 5 раз тапнуть логотип в шапке…</div>
     </div>
