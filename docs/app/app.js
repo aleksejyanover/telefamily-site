@@ -265,6 +265,7 @@ function tfGoOnline() {
   toast('✅ Связь восстановлена');
   try { connectWS(); } catch (e) {}
   loadChats().catch(() => {});
+  outboxFlush().catch(() => {});   /* связь вернулась — отправляем накопленное */
   if (state.current) openChat(state.current).catch(() => {});
 }
 
@@ -515,6 +516,7 @@ async function startApp() {
   await loadChats();
   connectWS();
   tfPushSync(); tfPushPending();   /* фоновый сервис: уведомления и звонки даже с закрытым приложением */
+  outboxFlush().catch(() => {});   /* вдруг осталась накопленная очередь с прошлого раза */
 }
 
 function renderMe() {
@@ -1425,6 +1427,7 @@ async function openChat(id) {
     renderMessages();
     markRead(id);
   } catch (e) { toast(e.message, true); }
+  try { $('input').value = loadDraft(id); autoGrow(); } catch (e) {}   /* вернуть черновик */
   renderTypingBar();
 }
 function markRead(id) {
@@ -1521,7 +1524,7 @@ function msgHTML(m, gap) {
       ${reactions ? `<div class="reactions">${reactions}</div>` : ''}
       <div class="msg-meta">${m.edited ? '<span class="edited">изменено</span>' : ''}<span>${fmtTime(m.createdAt)}</span>
       ${m.commentsCount ? `<button class="cm-badge" data-act="comments" title="Открыть комментарии">💬 ${m.commentsCount}</button>` : ''}
-      ${mine ? `<span class="ticks">${m.readBy && m.readBy.length ? '✓✓' : '✓'}</span>` : ''}</div>
+      ${mine ? `<span class="ticks">${m.pending ? '⏳' : (m.readBy && m.readBy.length ? '✓✓' : '✓')}</span>` : ''}</div>
     </div>
   </div>`;
 }
@@ -1568,14 +1571,85 @@ function scrollBottom(force) {
 }
 
 /* -------------------------------------------------------------- отправка */
-async function sendMessage(payload) {
+/* ------------------------------------------- 📨 надёжная отправка (очередь offline) */
+function outboxLoad() { try { return JSON.parse(localStorage.getItem('tf_outbox') || '[]'); } catch (e) { return []; } }
+function outboxSave(list) { try { localStorage.setItem('tf_outbox', JSON.stringify(list.slice(-60))); } catch (e) {} }
+function localMsg(chatId, payload) {
+  return {
+    id: 'local' + Date.now() + Math.random().toString(36).slice(2, 6),
+    chatId, userId: state.me.id, type: payload.type || 'text', text: payload.text || '',
+    url: payload.url || null, fileName: payload.fileName || null, fileSize: payload.fileSize || 0,
+    duration: payload.duration || 0, replyTo: payload.replyTo || null,
+    createdAt: Date.now(), edited: false, deleted: false, reactions: {},
+    authorName: state.me.name, authorAvatar: state.me.avatar, authorPremium: !!state.me.premium,
+    readBy: [], commentsCount: 0, pending: true,
+  };
+}
+function replaceLocal(localId, realMsg) {
+  const i = state.msgs.findIndex(x => x.id === localId);
+  if (i < 0) return;
+  state.msgs[i] = realMsg;
+  if (state.current === realMsg.chatId) renderMessages();
+}
+function removeLocal(localId) {
+  const i = state.msgs.findIndex(x => x.id === localId);
+  if (i < 0) return;
+  state.msgs.splice(i, 1);
+  if (state.current) renderMessages();
+}
+async function deliverQueued(item) {
+  const d = await api('POST', `/api/chats/${item.chatId}/messages`, item.payload);
+  replaceLocal(item.localId, d.msg);
+  const c = state.chatById[item.chatId];
+  if (c) { c.last = d.msg; c.unread = 0; renderChatList(); }
+  return d.msg;
+}
+async function outboxFlush() {
+  if (!state.token) return;
+  const list = outboxLoad();
+  if (!list.length) return;
+  const rest = []; let sent = 0;
+  for (const item of list) {
+    if (Date.now() - (item.createdAt || 0) > 24 * 3600e3) continue;   /* старше суток — стёрли */
+    try { await deliverQueued(item); sent++; } catch (e) { rest.push(item); }
+  }
+  outboxSave(rest);
+  if (sent && !rest.length) toast('📨 Отправил всё, что накопилось без связи');
+}
+function isNetErr(e) {
+  return tfOffline || /ловлю связь|Failed to fetch|NetworkError|Load failed|timed?\s*out/i.test(String((e && e.message) || ''));
+}
+/* ✏️ черновики: незаконченный текст переживает обрыв связи и перезагрузку */
+function draftKey(chatId) { return 'tf_draft_' + chatId; }
+function saveDraft() {
   if (!state.current) return;
   try {
-    const d = await api('POST', `/api/chats/${state.current}/messages`, payload);
-    appendMsg(d.msg, true);
-    const c = state.chatById[state.current];
-    if (c) { c.last = d.msg; c.unread = 0; renderChatList(); }
-  } catch (e) { toast(e.message, true); }
+    const v = $('input').value;
+    if (v) localStorage.setItem(draftKey(state.current), v);
+    else localStorage.removeItem(draftKey(state.current));
+  } catch (e) {}
+}
+function loadDraft(chatId) {
+  try { return localStorage.getItem(draftKey(chatId)) || ''; } catch (e) { return ''; }
+}
+async function sendMessage(payload) {
+  if (!state.current) return;
+  const chatId = state.current;
+  const lm = localMsg(chatId, payload);
+  appendMsg(lm, true);                       /* сразу видно своё сообщение с ⏳ */
+  try {
+    await deliverQueued({ chatId, localId: lm.id, payload });
+  } catch (e) {
+    if (isNetErr(e)) {
+      const list = outboxLoad().filter(x => x.localId !== lm.id);
+      list.push({ localId: lm.id, chatId, payload, createdAt: lm.createdAt });
+      outboxSave(list);
+      toast('🕓 Нет связи — сообщение в очереди, отправлю сразу, как связь вернётся');
+    } else {
+      removeLocal(lm.id);
+      toast(e.message, true);
+    }
+  }
 }
 function sendText() {
   const text = $('input').value.trim();
@@ -1594,7 +1668,7 @@ function sendText() {
   }
   const payload = { type: 'text', text };
   if (state.replyTo) payload.replyTo = state.replyTo;
-  $('input').value = ''; autoGrow(); cancelReply();
+  $('input').value = ''; autoGrow(); cancelReply(); saveDraft();
   wsSend({ t: 'typing', chatId: state.current, on: false });
   sendMessage(payload);
 }
@@ -1620,6 +1694,7 @@ function autoGrow() {
 }
 $('input').addEventListener('input', () => {
   autoGrow();
+  saveDraft();   /* черновик не пропадёт при обрыве или закрытии */
   wsSend({ t: 'typing', chatId: state.current, on: true });
 });
 $('input').addEventListener('keydown', e => {
@@ -2631,7 +2706,9 @@ async function openAdminChat(id, title) {
       (d.messages.length ? d.messages.map(m => `
       <div class="admin-msg">
         <b>${esc(m.authorName)}</b> <span class="admin-when">${adminWhen(m.createdAt)}</span>
-        <div>${esc(m.text || (m.type === 'image' ? '📷 Фото' : m.type === 'video' ? '🎥 Видео' : m.type === 'voice' ? '🎤 Голосовое' : m.type === 'file' ? '📄 ' + (m.fileName || 'Файл') : m.type || ''))}</div>
+        <div>${m.type === 'fun' ? '🍕 Пицца для всех! 🎉'
+          : (m.type === 'image' && m.url) ? `<img src="${esc(m.url)}" style="max-width:240px;border-radius:10px;display:block;margin-top:4px">`
+          : esc(m.text || (m.type === 'video' ? '🎥 Видео' : m.type === 'voice' ? '🎤 Голосовое (' + fmtDur(m.duration || 0) + ')' : m.type === 'videonote' ? '⭕ Кружок' : m.type === 'file' ? '📄 ' + (m.fileName || 'Файл') : m.type === 'call' ? '📞 ' + (m.text || 'Звонок') : m.type || ''))}</div>
       </div>`).join('') : '<div class="admin-load">Сообщений нет</div>');
   } catch (e) { b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
 }
