@@ -50,7 +50,13 @@ function ago(ts) {
   if (s < 60) return 'только что';
   if (s < 3600) return Math.floor(s / 60) + ' мин назад';
   if (s < 86400) return Math.floor(s / 3600) + ' ч назад';
-  return Math.floor(s / 86400) + ' дн назад';
+  const d = new Date(ts), now = new Date();
+  const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const dayDiff = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+  if (dayDiff === 0) return 'сегодня в ' + hm;
+  if (dayDiff === 1) return 'вчера в ' + hm;
+  if (dayDiff < 7) return d.toLocaleDateString('ru-RU', { weekday: 'long' }) + ' в ' + hm;
+  return d.toLocaleDateString('ru-RU') + ' в ' + hm;
 }
 const initials = name => (String(name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '?').toUpperCase();
 
