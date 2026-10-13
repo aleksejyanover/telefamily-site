@@ -618,11 +618,81 @@ async function openDm(username) {
   } catch (err) { toast(err.message, true); }
 }
 
+/* ------------------------------------------- 👤 чужие профили (как в Telegram)
+ * Паролей здесь нет и быть не может: сервер отдаёт только публичные поля,
+ * пароли видит исключительно владелец в своей панели. */
+async function userModal(userId) {
+  let u = state.users[userId] || (state.me && state.me.id === userId ? state.me : null);
+  if (!u) {
+    try {
+      const d = await api('GET', '/api/users');
+      (d.users || []).forEach(x => { state.users[x.id] = x; });
+      u = state.users[userId];
+    } catch (e) {}
+  }
+  if (!u) return;
+  const dm = state.chats.find(c => c.type === 'dm' && (c.members || []).some(m => m.id === userId));
+  const status = u.online ? 'в сети' : ('был(а) ' + ago(u.lastSeen || 0));
+  openModal(`
+    <div class="up-head">
+      ${avatarEl(u.avatar, u.name, 'avatar big')}
+      <div class="up-name">${esc(u.name)}</div>
+      <div class="up-status ${u.online ? 'on' : ''}">${esc(status)}</div>
+    </div>
+    <div class="up-info">
+      <div class="up-row"><span>Имя пользователя</span><b>@${esc(u.username)}</b></div>
+      ${u.bio ? `<div class="up-row"><span>О себе</span><b>${esc(u.bio)}</b></div>` : ''}
+      ${u.premium ? `<div class="up-row"><span>Статус</span><b>⭐ «${esc(PLAN_LABEL[u.plan] || 'Плюс')}»</b></div>` : ''}
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" id="upMsg" style="flex:1">💬 Написать</button>
+      ${dm ? `<button class="btn ghost" id="upCall" style="flex:1">📞 Позвонить</button>` : ''}
+      ${dm ? `<button class="btn ghost" id="upVideo" style="flex:1">🎥 Видео</button>` : ''}
+    </div>`);
+  $('upMsg').onclick = () => { closeModal(); if (dm) openChat(dm.id); else openDm(u.username); };
+  if (dm) $('upCall').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(false)).catch(() => {}); };
+  if (dm) $('upVideo').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(true)).catch(() => {}); };
+}
+/* 👥 участники группы: тап по участнику → его профиль */
+function groupInfoModal() {
+  const c = state.chatById[state.current];
+  if (!c || c.type !== 'group') return;
+  openModal(`
+    <div class="up-head">
+      ${avatarEl(c.avatar, c.title, 'avatar big')}
+      <div class="up-name">${esc(c.title)}</div>
+      <div class="up-status">${c.members.length} участников</div>
+    </div>
+    <div class="up-info">${c.members.map(m => `
+      <div class="up-row up-member" data-mid="${esc(m.id)}">
+        <span class="avatar-wrap">${avatarEl(m.avatar, m.name, 'avatar sm')}${m.online ? '<span class="online-dot"></span>' : ''}</span>
+        <b>${esc(m.name || m.username)}</b>
+        <span class="up-mnick">@${esc(m.username)}${m.online ? ' · в сети' : ''}</span>
+      </div>`).join('')}
+    </div>`);
+  $('modalBox').querySelectorAll('[data-mid]').forEach(row => { row.onclick = () => userModal(row.dataset.mid); });
+}
+/* тап по шапке чата: собеседник → его профиль, группа → участники */
+function chatHeadTap() {
+  const c = state.chatById[state.current];
+  if (!c) return;
+  if (c.type === 'group') return groupInfoModal();
+  const other = c.members.find(u => u.id !== state.me.id);
+  if (other) userModal(other.id);
+}
+$('chatHead').onclick = chatHeadTap;
+$('chatAvatar').onclick = chatHeadTap;
+
 $('search').addEventListener('input', () => renderChatList());
 $('chatList').addEventListener('click', e => {
   const it = e.target.closest('.chat-item'); if (!it) return;
   if (it.dataset.user) return openDm(it.dataset.user);
   if (it.dataset.id) openChat(it.dataset.id);
+});
+/* тап по автору сообщения (аватар или имя в группе) → его профиль */
+$('messages').addEventListener('click', e => {
+  const t = e.target.closest('[data-profile]');
+  if (t) userModal(t.dataset.profile);
 });
 function upsertChat(chat) {
   const i = state.chats.findIndex(c => c.id === chat.id);
@@ -1510,7 +1580,7 @@ function msgHTML(m, gap) {
   const reactions = Object.entries(m.reactions || {}).map(([e, arr]) =>
     `<button class="reaction" data-react="${esc(e)}">${esc(e)} ${arr.length}</button>`).join('');
   return `<div class="msg ${mine ? 'out' : 'in'} ${gap ? 'gap' : ''} ${m.deleted ? 'deleted' : ''}" data-id="${m.id}">
-    ${!mine ? (gap ? avatarEl(m.authorAvatar, m.authorName, 'avatar sm') : '<span style="width:30px;flex:none"></span>') : ''}
+    ${!mine ? (gap ? `<span data-profile="${esc(m.userId)}" class="ava-tap">${avatarEl(m.authorAvatar, m.authorName, 'avatar sm')}</span>` : '<span style="width:30px;flex:none"></span>') : ''}
     <div class="bubble">
       <div class="msg-tools">
         <button data-act="reply" title="Ответить">↩</button>
@@ -1519,7 +1589,7 @@ function msgHTML(m, gap) {
         ${mine && !m.deleted && (m.type === 'text') ? '<button data-act="edit" title="Изменить">✏️</button>' : ''}
         ${(mine || (state.me && state.me.owner)) && !m.deleted ? '<button data-act="del" title="Удалить">🗑</button>' : ''}
       </div>
-      ${showAuthor ? `<div class="msg-author">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
+      ${showAuthor ? `<div class="msg-author" data-profile="${esc(m.userId)}">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
       ${inner}
       ${reactions ? `<div class="reactions">${reactions}</div>` : ''}
       <div class="msg-meta">${m.edited ? '<span class="edited">изменено</span>' : ''}<span>${fmtTime(m.createdAt)}</span>

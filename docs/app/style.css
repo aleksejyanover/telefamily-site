@@ -600,3 +600,22 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
   66%  { box-shadow: 0 0 0 3px #4cc9f0, 0 0 20px #4cc9f0; }
   100% { box-shadow: 0 0 0 3px #ff5c8a, 0 0 20px #ff5c8a; }
 }
+
+/* ------------------------------------------- 👤 чужие профили (телеграм-стиль) */
+.ava-tap { cursor: pointer; flex: none; }
+.msg-author[data-profile] { cursor: pointer; }
+.up-head { text-align: center; padding: 4px 0 12px; }
+.up-head .avatar { width: 92px; height: 92px; font-size: 32px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; }
+.up-name { font-size: 20px; font-weight: 700; line-height: 1.25; }
+.up-status { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.up-status.on { color: #37d67a; }
+.up-info { margin: 4px 0 12px; }
+.up-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); font-size: 14px; text-align: left; }
+.up-row span { color: var(--muted); flex: none; }
+.up-row b { font-weight: 500; max-width: 62%; word-break: break-word; text-align: right; }
+.up-member { justify-content: flex-start; align-items: center; gap: 10px; cursor: pointer; border-radius: 10px; }
+.up-member:active { background: var(--panel2); }
+.up-member b { max-width: none; text-align: left; }
+.up-member .avatar { width: 34px; height: 34px; font-size: 13px; }
+.up-mnick { color: var(--muted); font-size: 13px; margin-left: auto; flex: none; }
+.chat-head-text, #chatAvatar { cursor: pointer; }
