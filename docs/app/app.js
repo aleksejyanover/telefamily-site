@@ -610,7 +610,7 @@ async function peopleHTML(qRaw) {
   return `<div style="padding:8px 12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px">Люди</div>` +
     users.slice(0, 8).map(u => `<div class="chat-item" data-user="${esc(u.username)}">
       <div class="avatar-wrap">${avatarEl(u.avatar, u.name)}${u.online ? '<span class="online-dot"></span>' : ''}</div>
-      <div class="ci-body"><div class="ci-top"><span class="ci-name">${esc(u.name)} ${u.premium ? '⭐' : ''}</span></div>
+      <div class="ci-body"><div class="ci-top"><span class="ci-name">${esc(u.name)} ${u.bot ? '🤖' : ''} ${u.premium ? '⭐' : ''}</span></div>
       <div class="ci-bottom"><span class="ci-preview">@${esc(u.username)}</span></div></div>
     </div>`).join('');
 }
@@ -638,7 +638,7 @@ async function userModal(userId) {
   }
   if (!u) return;
   const dm = state.chats.find(c => c.type === 'dm' && (c.members || []).some(m => m.id === userId));
-  const status = u.online ? 'в сети' : ('был(а) ' + ago(u.lastSeen || 0));
+  const status = u.bot ? '🤖 бот' : (u.online ? 'в сети' : ('был(а) ' + ago(u.lastSeen || 0)));
   openModal(`
     <div class="up-head">
       ${avatarEl(u.avatar, u.name, 'avatar big')}
@@ -652,8 +652,8 @@ async function userModal(userId) {
     </div>
     <div class="modal-actions">
       <button class="btn primary" id="upMsg" style="flex:1">💬 Написать</button>
-      ${dm ? `<button class="btn ghost" id="upCall" style="flex:1">📞 Позвонить</button>` : ''}
-      ${dm ? `<button class="btn ghost" id="upVideo" style="flex:1">🎥 Видео</button>` : ''}
+      ${dm && !u.bot ? `<button class="btn ghost" id="upCall" style="flex:1">📞 Позвонить</button>` : ''}
+      ${dm && !u.bot ? `<button class="btn ghost" id="upVideo" style="flex:1">🎥 Видео</button>` : ''}
     </div>`);
   $('upMsg').onclick = () => { closeModal(); if (dm) openChat(dm.id); else openDm(u.username); };
   if (dm) $('upCall').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(false)).catch(() => {}); };
@@ -1535,7 +1535,7 @@ function renderChatSub() {
   if (c.type === 'group') sub.textContent = `${c.members.length} участников`;
   else {
     const other = c.members.find(u => u.id !== state.me.id);
-    sub.textContent = other ? (other.online ? 'в сети' : 'был(а) ' + ago(other.lastSeen)) : '';
+    sub.textContent = !other ? '' : other.bot ? '🤖 бот' : (other.online ? 'в сети' : 'был(а) ' + ago(other.lastSeen));
   }
 }
 function renderTypingBar() {
@@ -2364,7 +2364,8 @@ function helpModal() {
       <div>🗑 <b>Удаление</b> — свои сообщения может удалить любой, чужие — владелец</div>
       <div>👥 <b>Группа</b> — меню ☰ → Новая группа; в группе есть 📞 общий звонок, ✏️ переименование и 🗑 удаление (в ⓘ чата)</div>
       <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка</div>
-      <div>🤫 <b>Секрет</b> — говорят, если5 раз тапнуть логотип➤ в шапке…</div>
+      <div>🤖 <b>Боты</b> — свой бот: найди в поиске @botfactory и напиши «Хочу создать бота»</div>
+      <div>🤫 <b>Секрет</b> — говорят, если 5 раз тапнуть логотип в шапке…</div>
     </div>
     <div class="modal-actions"><button class="btn primary" id="hOk">Понятно</button></div>`);
   $('hOk').onclick = closeModal;
