@@ -588,7 +588,7 @@ async function renderChatList() {
       return `<div class="chat-item ${state.current === c.id ? 'active' : ''}" data-id="${c.id}">
         <div class="avatar-wrap">${avatarEl(av, c.title)}${online ? '<span class="online-dot"></span>' : ''}</div>
         <div class="ci-body">
-          <div class="ci-top"><span class="ci-name">${esc(c.title)}${c.type === 'group' ? ' <span style="opacity:.6">👥</span>' : ''}</span>
+          <div class="ci-top"><span class="ci-name">${esc(c.title)}${c.type === 'group' ? ' <span style="opacity:.6">👥</span>' : c.type === 'channel' ? ' <span style="opacity:.6">📢</span>' : ''}</span>
           <span class="ci-meta">${c.last ? fmtTime(c.last.createdAt) : ''}</span></div>
           <div class="ci-bottom"><span class="ci-preview">${sub || esc(previewText(c))}</span>
           ${c.unread ? `<span class="ci-unread">${c.unread}</span>` : ''}</div>
@@ -662,17 +662,19 @@ async function userModal(userId) {
 /* 👥 участники группы: тап по участнику → его профиль */
 function groupInfoModal() {
   const c = state.chatById[state.current];
-  if (!c || c.type !== 'group') return;
+  if (!c || (c.type !== 'group' && c.type !== 'channel')) return;
+  const isCh = c.type === 'channel';
+  const role = m => m.id === c.ownerId ? '👑 ' : (isCh && (c.admins || []).includes(m.id) ? '⭐ ' : '');
   openModal(`
     <div class="up-head">
       ${avatarEl(c.avatar, c.title, 'avatar big')}
       <div class="up-name">${esc(c.title)}</div>
-      <div class="up-status">${c.members.length} участников</div>
+      <div class="up-status">${isCh ? '📢 канал · ' : ''}${c.members.length} ${isCh ? 'подписчиков' : 'участников'}</div>
     </div>
     <div class="up-info">${c.members.map(m => `
       <div class="up-row up-member" data-mid="${esc(m.id)}">
         <span class="avatar-wrap">${avatarEl(m.avatar, m.name, 'avatar sm')}${m.online ? '<span class="online-dot"></span>' : ''}</span>
-        <b>${esc(m.name || m.username)}</b>
+        <b>${role(m)}${esc(m.name || m.username)}</b>
         <span class="up-mnick">@${esc(m.username)}${m.online ? ' · в сети' : ''}</span>
       </div>`).join('')}
     </div>`);
@@ -682,7 +684,7 @@ function groupInfoModal() {
 function chatHeadTap() {
   const c = state.chatById[state.current];
   if (!c) return;
-  if (c.type === 'group') return groupInfoModal();
+  if (c.type === 'group' || c.type === 'channel') return groupInfoModal();
   const other = c.members.find(u => u.id !== state.me.id);
   if (other) userModal(other.id);
 }
@@ -1522,8 +1524,16 @@ function renderChatHeader() {
     : `<div id="chatAvatar" class="avatar">${esc(initials(c.title))}</div>`;
   renderChatSub();
 }
+/* кто может публиковать и модерировать: владелец сайта, создатель чата, админ канала */
+function chatMod(c) {
+  return !!c && !!(state.me && (state.me.owner || c.ownerId === state.me.id ||
+    (c.type === 'channel' && (c.admins || []).includes(state.me.id))));
+}
 function renderChatSub() {
   const c = state.chatById[state.current]; if (!c) return;
+  /* в канале подписчики только читают — поле ввода скрыто */
+  const comp = $('composer');
+  if (comp) comp.hidden = c.type === 'channel' && !chatMod(c);
   const typing = state.typing[c.id] || [];
   const sub = $('chatSub');
   if (typing.length) {
@@ -1533,6 +1543,7 @@ function renderChatSub() {
   }
   sub.classList.remove('live');
   if (c.type === 'group') sub.textContent = `${c.members.length} участников`;
+  else if (c.type === 'channel') sub.textContent = `${c.members.length} подписчиков`;
   else {
     const other = c.members.find(u => u.id !== state.me.id);
     sub.textContent = !other ? '' : other.bot ? '🤖 бот' : (other.online ? 'в сети' : 'был(а) ' + ago(other.lastSeen));
@@ -1593,7 +1604,7 @@ function msgHTML(m, gap) {
         <button data-act="react" title="Реакция">😀</button>
         ${!m.deleted ? `<button data-act="comments" title="Комментарии">💬${m.commentsCount ? ' ' + m.commentsCount : ''}</button>` : ''}
         ${mine && !m.deleted && (m.type === 'text') ? '<button data-act="edit" title="Изменить">✏️</button>' : ''}
-        ${(mine || (state.me && state.me.owner)) && !m.deleted ? '<button data-act="del" title="Удалить">🗑</button>' : ''}
+        ${(mine || chatMod(state.chatById[state.current])) && !m.deleted ? '<button data-act="del" title="Удалить">🗑</button>' : ''}
       </div>
       ${showAuthor ? `<div class="msg-author" data-profile="${esc(m.userId)}">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
       ${inner}
@@ -2064,6 +2075,7 @@ $('menuDrawer').addEventListener('click', e => {
   if (act === 'profile') profileModal();
   if (act === 'plus') premiumModal();
   if (act === 'group') groupModal();
+  if (act === 'channel') channelModal();
   if (act === 'theme') {
     const next = (localStorage.getItem('tg_theme') || 'dark') === 'dark' ? 'light' : 'dark';
     localStorage.setItem('tg_theme', next); document.body.dataset.theme = next;
@@ -2324,8 +2336,13 @@ function ownerModal() {
 function newChatModal() {
   const box = openModal(`<h3>Новый чат</h3>
     <div class="field"><label>Юзернейм собеседника</label><input id="ncName" placeholder="@username" autocapitalize="none"></div>
-    <div class="modal-actions"><button class="btn ghost" id="ncCancel">Отмена</button><button class="btn primary" id="ncGo">Начать чат</button></div>`);
+    <div class="modal-actions">
+      <button class="btn ghost" id="ncJoin">📢 К каналу</button>
+      <button class="btn ghost" id="ncCancel">Отмена</button>
+      <button class="btn primary" id="ncGo">Начать чат</button>
+    </div>`);
   $('ncCancel').onclick = closeModal;
+  $('ncJoin').onclick = () => { closeModal(); joinChannelModal(); };
   $('ncGo').onclick = async () => {
     try {
       const d = await api('POST', '/api/chats', { type: 'dm', username: $('ncName').value });
@@ -2351,6 +2368,39 @@ function groupModal() {
     } catch (e) { if (e.message !== 'skip') toast(e.message, true); throw e; }
   }).catch(() => {});
 }
+function channelModal() {
+  openModal(`<h3>Новый канал</h3>
+    <div class="field"><label>Название</label><input id="chName" placeholder="Например: Новости семьи"></div>
+    <div class="field"><label>Подписчики сразу (юзернеймы через запятую, можно пусто)</label><input id="chMembers" placeholder="alex, Наталья"></div>
+    <div class="modal-actions"><button class="btn ghost" id="chCancel">Отмена</button><button class="btn primary" id="chCreate">Создать</button></div>`);
+  $('chCancel').onclick = closeModal;
+  $('chCreate').onclick = () => withBusy($('chCreate'), async () => {
+    const name = $('chName').value.trim();
+    if (!name) { toast('Назови канал', true); throw new Error('skip'); }
+    const members = $('chMembers').value.split(',').map(s => s.trim()).filter(Boolean);
+    try {
+      const d = await api('POST', '/api/chats', { type: 'channel', name, members });
+      upsertChat(d.chat); renderChatList(); closeModal(); openChat(d.chat.id);
+      if (d.missing && d.missing.length) toast('⚠ Не нашли: ' + d.missing.join(', '), true);
+      else toast('📢 Канал создан! Расскажи друзьям его название — они подпишутся через «+»');
+    } catch (e) { if (e.message !== 'skip') toast(e.message, true); throw e; }
+  }).catch(() => {});
+}
+function joinChannelModal() {
+  openModal(`<h3>Подписаться на канал</h3>
+    <div class="field"><label>Название канала</label><input id="jcName" placeholder="Например: Новости семьи"></div>
+    <div class="modal-actions"><button class="btn ghost" id="jcCancel">Отмена</button><button class="btn primary" id="jcGo">Подписаться</button></div>`);
+  $('jcCancel').onclick = closeModal;
+  $('jcGo').onclick = () => withBusy($('jcGo'), async () => {
+    const name = $('jcName').value.trim();
+    if (!name) { toast('Введи название канала', true); throw new Error('skip'); }
+    try {
+      const d = await api('POST', '/api/channels/join', { name });
+      upsertChat(d.chat); renderChatList(); closeModal(); openChat(d.chat.id);
+      toast(d.already ? 'Ты уже подписан на этот канал' : '✅ Подписался на канал!');
+    } catch (e) { if (e.message !== 'skip') toast(e.message, true); throw e; }
+  }).catch(() => {});
+}
 function helpModal() {
   openModal(`<h3>💡 Как пользоваться TeleFamily</h3>
     <div class="plus-list" style="font-size:14px">
@@ -2362,7 +2412,8 @@ function helpModal() {
       <div>😀 <b>Реакции</b> — наведи на сообщение и нажми смайлик</div>
       <div>💬 <b>Комментарии</b> — кнопка 💬 у сообщения (счётчик виден под текстом)</div>
       <div>🗑 <b>Удаление</b> — свои сообщения может удалить любой, чужие — владелец</div>
-      <div>👥 <b>Группа</b> — меню ☰ → Новая группа; в группе есть 📞 общий звонок, ✏️ переименование и 🗑 удаление (в ⓘ чата)</div>
+      <div>👥 <b>Группа</b> — меню ☰ → Новая группа; людей добавляй в ⓘ чата (➕), там же ✏️ и 🗑</div>
+      <div>📢 <b>Канал</b> — меню ☰ → Новый канал: ты владелец, можешь назначить ⭐ админов; подписчики равны и только читают. Подписка: кнопка + → «К каналу»</div>
       <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка</div>
       <div>🤖 <b>Боты</b> — свой бот: найди в поиске @botfactory и напиши «Хочу создать бота»</div>
       <div>🤫 <b>Секрет</b> — говорят, если 5 раз тапнуть логотип в шапке…</div>
@@ -2374,16 +2425,35 @@ $('btnNewChat').onclick = newChatModal;
 $('btnBack').onclick = () => { state.current = null; $('app').classList.remove('chat-open'); $('chatView').hidden = true; $('emptyState').hidden = false; renderChatList(); };
 $('btnChatInfo').onclick = () => {
   const c = state.chatById[state.current]; if (!c) return;
-  const canDel = c.type === 'group' && (c.ownerId === (state.me && state.me.id) || (state.me && state.me.owner));
+  const isCh = c.type === 'channel';
+  const isGC = c.type === 'group' || isCh;
+  const mod = chatMod(c);
+  const canDel = isGC && mod;
+  const canAdd = isGC && (c.type === 'group' || (isCh && mod));
+  const iAmOwner = !!(state.me && (state.me.owner || c.ownerId === state.me.id));
+  const role = u => u.id === c.ownerId ? '👑 владелец'
+    : (isCh && (c.admins || []).includes(u.id) ? '⭐ админ' : '');
+  const sub = isCh ? `📢 Канал · ${c.members.length} подписчиков`
+    : c.type === 'group' ? `Группа · ${c.members.length} участник(ов)`
+    : `Личный чат · ${c.members.length} участник(ов)`;
   openModal(`<h3>${esc(c.title)}</h3>
-    <p class="sub">${c.type === 'group' ? 'Группа' : 'Личный чат'} · ${c.members.length} участник(ов)</p>
-    <div class="list-scroll">${c.members.map(u => `<div class="search-result">
+    <p class="sub">${sub}</p>
+    <div class="list-scroll">${c.members.map(u => {
+      const r = role(u);
+      const isMe = u.id === (state.me && state.me.id);
+      const isAdmin = (c.admins || []).includes(u.id);
+      const togglable = isCh && iAmOwner && !isMe && u.id !== c.ownerId;
+      return `<div class="search-result">
       <div class="avatar-wrap">${avatarEl(u.avatar, u.name, 'avatar sm')}${u.online ? '<span class="online-dot" style="border-color:var(--panel)"></span>' : ''}</div>
-      <div><div class="sr-name">${esc(u.name)} ${u.premium ? '⭐' : ''}</div><div class="sr-nick">@${esc(u.username)}${u.id === state.me.id ? ' · это ты' : ''}</div></div>
-    </div>`).join('')}</div>
+      <div><div class="sr-name">${esc(u.name)} ${u.premium ? '⭐' : ''} ${r ? `<b style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:0 5px;opacity:.85">${r}</b>` : ''}</div><div class="sr-nick">@${esc(u.username)}${isMe ? ' · это ты' : ''}</div></div>
+      ${togglable ? `<button class="btn ghost" data-adm="${esc(u.username)}" data-on="${isAdmin ? '0' : '1'}" style="margin-left:auto;padding:5px 9px;font-size:12px;flex:none">${isAdmin ? 'убрать' : '⭐ админ'}</button>` : ''}
+    </div>`; }).join('')}</div>
+    ${canAdd ? `<div class="field" style="margin-top:8px"><label>Добавить участника</label><input id="ciAdd" placeholder="@username" autocapitalize="none"></div>
+    <button class="btn primary" id="ciAddBtn" style="width:100%">➕ Добавить в ${isCh ? 'канал' : 'группу'}</button>` : ''}
     <div class="modal-actions">
       ${canDel ? '<button class="btn ghost" id="ciRen">✏️ Переименовать</button>' : ''}
-      ${canDel ? '<button class="btn danger" id="ciDel">🗑 Удалить группу</button>' : ''}
+      ${canDel ? `<button class="btn danger" id="ciDel">🗑 Удалить ${isCh ? 'канал' : 'группу'}</button>` : ''}
+      ${isCh && !iAmOwner ? '<button class="btn ghost" id="ciLeave">🚪 Отписаться</button>' : ''}
       <button class="btn primary" id="ciOk">Закрыть</button>
     </div>`);
   $('ciOk').onclick = closeModal;
@@ -2391,10 +2461,34 @@ $('btnChatInfo').onclick = () => {
     $('ciRen').onclick = () => renameGroupModal(c);
     $('ciDel').onclick = () => confirmDeleteGroup(c);
   }
+  if ($('ciLeave')) $('ciLeave').onclick = async () => {
+    try { await api('POST', `/api/chats/${c.id}/leave`); closeModal(); toast('🚪 Ты отписался от канала'); }
+    catch (e) { toast(e.message, true); }
+  };
+  if (canAdd) $('ciAddBtn').onclick = async () => {
+    const v = $('ciAdd').value.trim();
+    if (!v) { toast('Введи @username', true); return; }
+    try {
+      const d = await api('POST', `/api/chats/${c.id}/members`, { username: v });
+      upsertChat(d.chat); renderChatList(); toast(`➕ @${d.added} добавлен${/(а|я)$/.test(d.added) ? 'а' : ''}`);
+      $('btnChatInfo').click(); /* перерисовать список */
+    } catch (e) { toast(e.message, true); }
+  };
+  $('modalBox').querySelectorAll('[data-adm]').forEach(b => {
+    b.onclick = async () => {
+      try {
+        const d = await api('POST', `/api/chats/${c.id}/admin`, { username: b.dataset.adm, on: b.dataset.on === '1' });
+        c.admins = d.admins; /* чат живой — тот же объект в state */
+        toast(d.on ? '⭐ Теперь админ канала' : '⭐ Админский снят');
+        $('btnChatInfo').click();
+      } catch (e) { toast(e.message, true); }
+    };
+  });
 };
 function renameGroupModal(c) {
-  openModal(`<h3>Переименовать группу</h3>
-    <div class="field"><label>Новое название</label><input id="rnName" value="${esc(c.title)}" maxlength="60" placeholder="Название группы"></div>
+  const noun = c.type === 'channel' ? 'канал' : 'группу';
+  openModal(`<h3>Переименовать ${noun}</h3>
+    <div class="field"><label>Новое название</label><input id="rnName" value="${esc(c.title)}" maxlength="60" placeholder="Название"></div>
     <div class="modal-actions"><button class="btn ghost" id="rnNo">Отмена</button><button class="btn primary" id="rnYes">Сохранить</button></div>`);
   $('rnNo').onclick = closeModal;
   const inp = $('rnName'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -2404,12 +2498,13 @@ function renameGroupModal(c) {
     try {
       await api('POST', `/api/chats/${c.id}/rename`, { name });
       closeModal();
-      toast('Группа переименована');
+      toast(noun === 'канал' ? 'Канал переименован' : 'Группа переименована');
     } catch (e) { if (e.message !== 'skip') toast(e.message, true); throw e; }
   }).catch(() => {});
 }
 function confirmDeleteGroup(c) {
-  openModal(`<h3>Удалить группу?</h3>
+  const noun = c.type === 'channel' ? 'канал' : 'группу';
+  openModal(`<h3>Удалить ${noun}?</h3>
     <p class="sub">«${esc(c.title)}» и все её сообщения исчезнут у всех участников. Отменить будет нельзя.</p>
     <div class="modal-actions"><button class="btn ghost" id="dgNo">Отмена</button><button class="btn danger" id="dgYes">Удалить навсегда</button></div>`);
   $('dgNo').onclick = closeModal;
@@ -2420,7 +2515,7 @@ function confirmDeleteGroup(c) {
       await api('DELETE', `/api/chats/${c.id}`);
       removeChat(c.id);
       closeModal();
-      toast('Группа удалена');
+      toast(noun === 'канал' ? 'Канал удалён' : 'Группа удалена');
     } catch (e) { btn.disabled = false; btn.textContent = 'Удалить навсегда'; toast(e.message, true); }
   };
 }
