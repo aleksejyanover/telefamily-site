@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TeleFamily">
 <link rel="apple-touch-icon" href="./icon-180.png">
-<script>window.__TFSERVER__ = "https://telefamily.serveousercontent.com"; window.__TFSERVER2__ = "https://f6545e688f5c95.lhr.life";</script>
+<script>window.__TFSERVER__ = "https://telefamily.serveousercontent.com"; window.__TFSERVER2__ = "https://c40331fe14eff1.lhr.life";</script>
 <title>TeleFamily — общение без границ</title>
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -81,6 +81,8 @@
       <svg viewBox="0 0 24 24" class="search-ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" placeholder="Поиск людей и чатов" autocomplete="off">
     </div>
+
+    <div id="storiesBar" class="stories-bar" hidden></div>
 
     <div id="chatList" class="chat-list"></div>
     <div id="peopleList" class="chat-list" hidden></div>
@@ -185,6 +187,9 @@
     <button class="drawer-item danger" data-act="logout">🚪 Выйти</button>
   </div>
 </div>
+
+<!-- ================= ПРОСМОТР ИСТОРИЙ ================= -->
+<div id="storyViewer" class="story-viewer" hidden></div>
 
 <!-- ================= МОДАЛКИ ================= -->
 <div id="modalRoot" class="modal-root" hidden>
