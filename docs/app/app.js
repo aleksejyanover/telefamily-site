@@ -1580,7 +1580,7 @@ function msgHTML(m, gap) {
     else if (m.type === 'voice') inner += voiceHTML(m);
     else if (m.type === 'file') inner += `<a class="file-chip" href="${esc(m.url)}" download="${esc(m.fileName || 'file')}"><span class="file-ico">📄</span><span><span class="file-name">${esc(m.fileName || 'Файл')}</span><br><span class="file-size">${fmtSize(m.fileSize)}</span></span></a>`;
     else if (m.type === 'call') inner += `<div class="msg-call">📞 ${esc(m.text || 'Звонок')}</div>`;
-    else if (m.type === 'fun') inner += `<div class="msg-fun">🍕 ${m.text === 'pizza' ? 'Пицца для всех! 🎉' : esc(m.text || 'Сюрприз')}</div>`;
+    else if (m.type === 'fun') inner += `<div class="msg-fun">${funLabel(m.text)}</div>`;
     if (m.text && m.type !== 'fun') inner += `<div class="msg-text">${linkify(m.text)}</div>`;
   }
   const reactions = Object.entries(m.reactions || {}).map(([e, arr]) =>
@@ -1617,7 +1617,7 @@ function voiceHTML(m) {
 }
 function appendMsg(m, scroll) {
   if (state.msgs.find(x => x.id === m.id)) return replaceMsg(m);
-  if (m.type === 'fun') funBurst(m.text === 'pizza' ? '🍕' : '🎉');   /* 🎉 сюрприз прилетел */
+  if (m.type === 'fun') funBurst(funEmoji(m.text));   /* 🎉 сюрприз прилетел */
   const prev = state.msgs[state.msgs.length - 1];
   state.msgs.push(m);
   const box = $('messages');
@@ -1736,10 +1736,19 @@ function sendText() {
     if (clipsUnlocked()) openClips(); else toast('🔒 Секретная команда… Говорят, кто-то 5 раз тапал логотип', true);
     return;
   }
-  /* 🍕 пасхалка: /pizza — пицца падает на экран у всех в чате */
-  if (/^\/(pizza|пицца|пиццы)$/i.test(text)) {
+  /* 🎉 пасхалки-команды: праздничный дождь у всех в чате
+   * /pizza 🍕  /dance 💃  /gift 🎁  (русские версии тоже работают) */
+  const funKind = (function (t) {
+    const m = t.match(/^\/(pizza|пицца|пиццы|dance|танец|танцы|подарок|подарки|gift)$/i);
+    if (!m) return null;
+    const k = m[1].toLowerCase();
+    if (k.indexOf('pizza') === 0 || k.indexOf('пицц') === 0) return 'pizza';
+    if (k.indexOf('dance') === 0 || k.indexOf('танц') === 0) return 'dance';
+    return 'gift';
+  })(text);
+  if (funKind) {
     $('input').value = ''; autoGrow();
-    sendMessage({ type: 'fun', text: 'pizza' });
+    sendMessage({ type: 'fun', text: funKind });
     return;
   }
   const payload = { type: 'text', text };
@@ -2782,7 +2791,7 @@ async function openAdminChat(id, title) {
       (d.messages.length ? d.messages.map(m => `
       <div class="admin-msg">
         <b>${esc(m.authorName)}</b> <span class="admin-when">${adminWhen(m.createdAt)}</span>
-        <div>${m.type === 'fun' ? '🍕 Пицца для всех! 🎉'
+        <div>${m.type === 'fun' ? funLabel(m.text)
           : (m.type === 'image' && m.url) ? `<img src="${esc(m.url)}" style="max-width:240px;border-radius:10px;display:block;margin-top:4px">`
           : esc(m.text || (m.type === 'video' ? '🎥 Видео' : m.type === 'voice' ? '🎤 Голосовое (' + fmtDur(m.duration || 0) + ')' : m.type === 'videonote' ? '⭕ Кружок' : m.type === 'file' ? '📄 ' + (m.fileName || 'Файл') : m.type === 'call' ? '📞 ' + (m.text || 'Звонок') : m.type || ''))}</div>
       </div>`).join('') : '<div class="admin-load">Сообщений нет</div>');
@@ -2816,6 +2825,12 @@ async function runAdminTests() {
 }
 
 /* ------------------------------------------- 🎉 пасхалки: сюрприз-дождь и вечеринка */
+function funLabel(kind) {
+  return kind === 'dance' ? '💃 Танцпол для всех! 🕺'
+    : kind === 'gift' ? '🎁 Подарок для всех! 🎁'
+    : '🍕 Пицца для всех! 🎉';
+}
+function funEmoji(kind) { return kind === 'dance' ? '💃' : kind === 'gift' ? '🎁' : '🍕'; }
 function funBurst(emoji) {
   const ov = document.createElement('div');
   ov.className = 'fun-rain';
