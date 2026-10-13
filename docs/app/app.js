@@ -237,7 +237,7 @@ function tfBanner(on) {
       'box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none';
     (document.body || document.documentElement).appendChild(b);
   }
-  b.textContent = '📡 Переподключаюсь…';
+  b.textContent = '🔄 Секунду… ловлю связь';
   b.style.display = on ? 'block' : 'none';
 }
 function tfGoOffline() {
@@ -253,9 +253,9 @@ function tfGoOffline() {
         return;
       }
     } catch (e) {}
-    if (tfOffline) tfOfflineT = setTimeout(tick, 4000);   /* не сдаёмся — пробуем каждые 4 секунды */
+    if (tfOffline) tfOfflineT = setTimeout(tick, 2500);   /* не сдаёмся — пробуем каждые 2.5 секунды */
   };
-  tfOfflineT = setTimeout(tick, 1500);
+  tfOfflineT = setTimeout(tick, 700);
 }
 function tfGoOnline() {
   if (!tfOffline) return;
@@ -335,7 +335,7 @@ async function api(method, path, body) {
       if (await tfRecover()) { await sleep(300); continue; }
       if (attempt < 4) { await sleep(1200); continue; }
       tfGoOffline();
-      throw new Error('📡 Переподключаюсь…');
+      throw new Error('🔄 Секунду… ловлю связь');
     }
     if (r.status === 401 && path !== '/api/login' && path !== '/api/register' && path !== '/api/github') { if (state.me) forgetAccount(state.me.username); logout(true); throw new Error('session'); }
     const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
@@ -354,7 +354,7 @@ async function api(method, path, body) {
     return data;
   }
   tfGoOffline();
-  throw new Error('📡 Переподключаюсь…');
+  throw new Error('🔄 Секунду… ловлю связь');
 }
 async function upload(file) {
   const doFetch = () => fetch(apiBase() + '/api/upload', {
@@ -1501,7 +1501,8 @@ function msgHTML(m, gap) {
     else if (m.type === 'voice') inner += voiceHTML(m);
     else if (m.type === 'file') inner += `<a class="file-chip" href="${esc(m.url)}" download="${esc(m.fileName || 'file')}"><span class="file-ico">📄</span><span><span class="file-name">${esc(m.fileName || 'Файл')}</span><br><span class="file-size">${fmtSize(m.fileSize)}</span></span></a>`;
     else if (m.type === 'call') inner += `<div class="msg-call">📞 ${esc(m.text || 'Звонок')}</div>`;
-    if (m.text) inner += `<div class="msg-text">${linkify(m.text)}</div>`;
+    else if (m.type === 'fun') inner += `<div class="msg-fun">🍕 ${m.text === 'pizza' ? 'Пицца для всех! 🎉' : esc(m.text || 'Сюрприз')}</div>`;
+    if (m.text && m.type !== 'fun') inner += `<div class="msg-text">${linkify(m.text)}</div>`;
   }
   const reactions = Object.entries(m.reactions || {}).map(([e, arr]) =>
     `<button class="reaction" data-react="${esc(e)}">${esc(e)} ${arr.length}</button>`).join('');
@@ -1537,6 +1538,7 @@ function voiceHTML(m) {
 }
 function appendMsg(m, scroll) {
   if (state.msgs.find(x => x.id === m.id)) return replaceMsg(m);
+  if (m.type === 'fun') funBurst(m.text === 'pizza' ? '🍕' : '🎉');   /* 🎉 сюрприз прилетел */
   const prev = state.msgs[state.msgs.length - 1];
   state.msgs.push(m);
   const box = $('messages');
@@ -1581,7 +1583,13 @@ function sendText() {
   /* секретная команда 🎬 клипов */
   if (/^\/(clip|clips|клип|клипы)$/i.test(text)) {
     $('input').value = ''; autoGrow();
-    if (clipsUnlocked()) openClips(); else toast('🔒 Секретная команда… Говорят, кто-то5 раз тапал логотип', true);
+    if (clipsUnlocked()) openClips(); else toast('🔒 Секретная команда… Говорят, кто-то 5 раз тапал логотип', true);
+    return;
+  }
+  /* 🍕 пасхалка: /pizza — пицца падает на экран у всех в чате */
+  if (/^\/(pizza|пицца|пиццы)$/i.test(text)) {
+    $('input').value = ''; autoGrow();
+    sendMessage({ type: 'fun', text: 'pizza' });
     return;
   }
   const payload = { type: 'text', text };
@@ -1943,6 +1951,7 @@ function profileModal() {
     </div>
     ${m.premium && !m.owner ? '<div style="text-align:center;margin-top:14px"><button class="btn danger" id="pfUnsub" style="padding:8px 16px">Отменить подписку</button></div>' : ''}`);
   $('pickAvatar').onclick = () => $('avatarFile').click();
+  attachPartyTaps();   /* 🎉 пасхалка: 3 тапа по аватару — вечеринка */
   $('avatarFile').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -2652,3 +2661,43 @@ async function runAdminTests() {
       '<div class="admin-center"><button class="admin-btn big" id="adminRerun">🔁 Запустить ещё раз</button></div>';
   } catch (e) { b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
 }
+
+/* ------------------------------------------- 🎉 пасхалки: сюрприз-дождь и вечеринка */
+function funBurst(emoji) {
+  const ov = document.createElement('div');
+  ov.className = 'fun-rain';
+  for (let i = 0; i < 26; i++) {
+    const s = document.createElement('span');
+    s.textContent = emoji;
+    s.style.cssText = 'left:' + (Math.random() * 100).toFixed(1) + '%;' +
+      'animation-duration:' + (1.6 + Math.random() * 1.4).toFixed(2) + 's;' +
+      'animation-delay:' + (Math.random() * 0.6).toFixed(2) + 's;' +
+      'font-size:' + Math.round(22 + Math.random() * 26) + 'px';
+    ov.appendChild(s);
+  }
+  document.body.appendChild(ov);
+  setTimeout(() => ov.remove(), 4300);
+}
+function partyToggle(force) {
+  const on = force !== undefined ? !!force : !document.body.classList.contains('party');
+  document.body.classList.toggle('party', on);
+  try { localStorage.setItem('tf_party', on ? '1' : ''); } catch (e) {}
+  if (force === undefined) {
+    if (on) { funBurst('🎉'); toast('🎉 Вечеринка включена! 3 тапа по аватару — выключить'); }
+    else toast('Вечеринка выключена');
+  }
+}
+/* 🎉 пасхалка №2: 3 быстрых тапа по большому аватару в профиле — режим вечеринки */
+function attachPartyTaps() {
+  const box = document.querySelector('.avatar-edit');
+  if (!box || box.dataset.partyTaps) return;
+  box.dataset.partyTaps = '1';
+  let taps = 0, tapT = null;
+  box.addEventListener('click', () => {
+    taps++; clearTimeout(tapT);
+    tapT = setTimeout(() => { taps = 0; }, 1200);
+    if (taps >= 3) { taps = 0; partyToggle(); }
+  });
+}
+/* сохранившуюся вечеринку включаем сразу при старте */
+try { if (localStorage.getItem('tf_party')) partyToggle(true); } catch (e) {}

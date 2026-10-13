@@ -587,3 +587,16 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .admin-msg .admin-when { margin-left: 8px; }
 .admin-msg div { margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
 .admin-verdict { font-weight: 700; font-size: 16px; color: #37d67a; }
+
+/* ------------------------------------------- 🎉 пасхалки: дождь-сюрприз и вечеринка */
+.fun-rain { position: fixed; inset: 0; pointer-events: none; z-index: 99998; overflow: hidden; }
+.fun-rain span { position: absolute; top: -44px; animation: funFall 3s linear forwards; will-change: transform; }
+@keyframes funFall { to { transform: translateY(110vh) rotate(320deg); } }
+.msg-fun { font-size: 17px; font-weight: 700; padding: 4px 2px; letter-spacing: .2px; }
+body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2.2s linear infinite; border-radius: 50%; }
+@keyframes partyGlow {
+  0%   { box-shadow: 0 0 0 3px #ff5c8a, 0 0 20px #ff5c8a; }
+  33%  { box-shadow: 0 0 0 3px #ffd166, 0 0 20px #ffd166; }
+  66%  { box-shadow: 0 0 0 3px #4cc9f0, 0 0 20px #4cc9f0; }
+  100% { box-shadow: 0 0 0 3px #ff5c8a, 0 0 20px #ff5c8a; }
+}
