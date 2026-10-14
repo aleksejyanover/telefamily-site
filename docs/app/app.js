@@ -2938,6 +2938,7 @@ $('btnChatInfo').onclick = () => {
     </div>`; }).join('')}</div>
     ${canAdd ? `<div class="field" style="margin-top:8px"><label>Добавить участника</label><input id="ciAdd" placeholder="@username" autocapitalize="none"></div>
     <button class="btn primary" id="ciAddBtn" style="width:100%">➕ Добавить в ${isCh ? 'канал' : 'группу'}</button>` : ''}
+    <button class="btn danger" id="ciHide" style="width:100%;margin-top:10px">🗑 Удалить только для себя</button>
     <div class="modal-actions">
       ${state.me && state.me.owner ? `<button class="btn ghost" id="ciLock" style="flex:1">${c.lock ? '🔓 Снять замок' : '🔒 Закрыть паролем'}</button>` : ''}
       ${canDel ? '<button class="btn ghost" id="ciRen">✏️ Переименовать</button>' : ''}
@@ -2961,6 +2962,14 @@ $('btnChatInfo').onclick = () => {
   if ($('ciLeave')) $('ciLeave').onclick = async () => {
     try { await api('POST', `/api/chats/${c.id}/leave`); closeModal(); toast('🚪 Ты отписался от канала'); }
     catch (e) { toast(e.message, true); }
+  };
+  if ($('ciHide')) $('ciHide').onclick = async () => {
+    try {
+      await api('POST', `/api/chats/${c.id}/hide`);
+      closeModal();
+      removeChat(c.id);
+      toast('🗑 Удалено только у тебя — остальные его видят. Новое сообщение вернёт чат');
+    } catch (e) { toast(e.message, true); }
   };
   if (canAdd) $('ciAddBtn').onclick = async () => {
     const v = $('ciAdd').value.trim();
