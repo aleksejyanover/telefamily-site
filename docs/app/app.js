@@ -597,6 +597,7 @@ async function startApp() {
       history.replaceState(null, '', u2.pathname + u2.search);
     }
   } catch (e) {}
+  maybeInterstitial();   /* бесплатный тариф: настоящая видеореклама — раз за сессию */
 }
 
 function renderMe() {
@@ -646,8 +647,11 @@ function previewText(c) {
   return who + body;
 }
 
-/* реклама на бесплатном тарифе: карточка в списке чатов и полоса над вводом */
-function showAds() { return !!(state.me && !state.me.premium); }
+/* реклама на бесплатном тарифе: карточка в списке чатов и полоса над вводом.
+   За просмотр полноэкранного ролика — час без рекламы (как в настоящих приложениях). */
+const AD_FREE_MS = 36e5;   /* награда за просмотр интерстишла:1 час */
+function adFreeUntil() { return +(localStorage.getItem('tf_ad_free') || 0); }
+function showAds() { return !!(state.me && !state.me.premium && Date.now() > adFreeUntil()); }
 
 /* пул рекламы: карточка на КАЖДЫЙ тариф + игры/приложения из магазинов.
    Тап по приложению — настоящая ссылка: iOS → App Store, остальное → Google Play. */
@@ -703,10 +707,102 @@ function bindAdCards(root) {
     const ad = e.target.closest('[data-ad]');
     if (!ad || ad.dataset.ad !== 'tariff') return;
     e.preventDefault();
-    premiumModal();
+    /* настоящая видеореклама: крестик через5 сек → после закрытия откроются тарифы */
+    showVideoAd({ afterClose: () => premiumModal() });
   });
 }
 bindAdCards();
+
+/* ---------- полноэкранная видеореклама: видео, отсчёт и крестик — как в настоящих приложениях ---------- */
+const AD_SKIP = 5;   /* крестик появляется через5 секунд */
+function showVideoAd(opts) {
+  opts = opts || {};
+  if (document.querySelector('.ad-video-root')) return;   /* не наслаивать поверх другой рекламы */
+  const root = document.createElement('div');
+  root.className = 'ad-video-root';
+  root.innerHTML = `
+    <video class="ad-video" playsinline webkit-playsinline preload="auto" src="${fixU('/uploads/ad-family.mp4')}"></video>
+    <div class="ad-fallback" hidden><div class="ad-fb-emoji">📺</div><div class="ad-fb-title">Реклама</div><div class="ad-fb-sub">Смотрите — это быстро!</div></div>
+    <div class="ad-top">
+      <span class="ad-label">📡 Реклама</span>
+      <span class="ad-countdown"></span>
+      <button class="ad-x" hidden aria-label="Закрыть рекламу">✕</button>
+    </div>
+    <div class="ad-progress"><i></i></div>
+    <div class="ad-bottom">
+      <div class="ad-cta">
+        <div class="ad-cta-ic">➤</div>
+        <div class="ad-cta-txt"><b>TeleFamily</b><span>семейный мессенджер · всё без лимитов</span></div>
+        <a class="ad-cta-btn" href="https://aleksejyanover.github.io/telefamily-site/" target="_blank" rel="noopener">Открыть</a>
+      </div>
+      ${opts.reward ? `<div class="ad-reward-hint">🎁 за просмотр — тариф «${PLAN_LABEL[opts.reward]}» на сутки</div>` : ''}
+    </div>`;
+  document.body.appendChild(root);
+  const vid = root.querySelector('.ad-video');
+  const x = root.querySelector('.ad-x');
+  const cnt = root.querySelector('.ad-countdown');
+  const bar = root.querySelector('.ad-progress i');
+  let closed = false, fallbackOn = false;
+  /* отсчёт до крестика */
+  let left = AD_SKIP;
+  cnt.textContent = 'Крестик через ' + left;
+  const tick = setInterval(() => {
+    left--;
+    if (left > 0) { cnt.textContent = 'Крестик через ' + left; return; }
+    cnt.textContent = '';
+    clearInterval(tick);
+    if (x.hidden) { x.hidden = false; x.classList.add('pulse'); }
+  }, 1000);
+  /* запасная анимация, если видео не загрузилось (нет файла или нет кодека) */
+  const toFallback = () => {
+    if (closed || fallbackOn || vid.duration) return;
+    fallbackOn = true;
+    vid.hidden = true;
+    root.querySelector('.ad-fallback').hidden = false;
+    bar.style.transition = 'width 12s linear';
+    bar.style.width = '100%';
+  };
+  vid.addEventListener('error', toFallback);
+  setTimeout(toFallback, 3000);
+  vid.addEventListener('timeupdate', () => {
+    if (vid.duration) bar.style.width = Math.min(100, vid.currentTime / vid.duration * 100) + '%';
+  });
+  /* звук включаем: ролик открывается по тапу — autoplay со звуком разрешён */
+  vid.muted = false;
+  vid.volume = 1;
+  vid.play().catch(() => { vid.muted = true; vid.play().catch(toFallback); });
+  function close() {
+    if (closed) return;
+    closed = true;
+    clearInterval(tick);
+    try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch (e) {}
+    root.remove();
+    if (opts.reward) {
+      api('POST', '/api/ad/reward', { plan: opts.reward })
+        .then(r => {
+          refreshMe().then(() => { if (opts.onReward) opts.onReward(r); }).catch(() => {});
+          toast(r.message || `📺 «${PLAN_LABEL[opts.reward]}» активирован до ${new Date(r.expires).toLocaleDateString('ru')} · сегодня ещё ${r.left}`);
+        })
+        .catch(e => toast(e.message, true));
+    } else {
+      localStorage.setItem('tf_ad_free', String(Date.now() + AD_FREE_MS));
+      const u = new Date(Date.now() + AD_FREE_MS);
+      toast(`Спасибо, что посмотрели! Без рекламы до ${u.getHours()}:${String(u.getMinutes()).padStart(2, '0')} 🎉`);
+      renderChatList();
+    }
+    if (opts.afterClose) opts.afterClose();
+  }
+  x.onclick = close;
+}
+
+/* интерстишл для бесплатного тарифа: один раз за сессию, если прошёл час без рекламы */
+function maybeInterstitial() {
+  if (!showAds()) return;
+  if (sessionStorage.getItem('tf_ad_session')) return;
+  sessionStorage.setItem('tf_ad_session', '1');
+  if (Date.now() < adFreeUntil()) return;
+  setTimeout(() => showVideoAd({}), 1800);
+}
 
 /* ---------------------------------------------------- 🖼 Истории (как в Telegram) */
 async function loadStories() {
@@ -2725,6 +2821,7 @@ function renderPlans(d) {
       <div class="price">${p.price ? p.price + ' ₽' : '0 ₽'}</div>
       <div class="per">${p.price ? 'в месяц' : 'навсегда'}</div>
       <div class="plan-feats">${p.feats.map(f => `<div><span class="ok">✓</span> ${esc(f)}</div>`).join('')}</div>
+      ${(!d.owner && (p.id === 'start' || p.id === 'plus')) ? '<div class="plan-ad">📺 или бесплатно — за просмотр рекламы</div>' : ''}
     </div>`).join('');
 
   const cardsLine = cards.length
@@ -2739,6 +2836,7 @@ function renderPlans(d) {
     <div class="modal-actions">
       <button class="btn ghost" id="plOwner">🔑 Карта владельца</button>
       <button class="btn ghost" id="plCancel">Закрыть</button>
+      <button class="btn ghost" id="plAd" hidden>📺 Получить за рекламу</button>
       <button class="btn primary" id="plBuy"></button>
     </div>`);
 
@@ -2749,6 +2847,8 @@ function renderPlans(d) {
       : (cards.length ? `Оплатить ${price} ₽ картой ••${cards[0].last4}` : `Привязать карту и оплатить ${price} ₽`);
     $('plBuy').disabled = (sel === cur.plan && cur.active && !d.owner);
     if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
+    /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика */
+    $('plAd').hidden = d.owner || (sel !== 'start' && sel !== 'plus');
   };
 
   box.querySelectorAll('.plan').forEach(p => p.onclick = () => { sel = p.dataset.plan; upd(); });
@@ -2765,6 +2865,10 @@ function renderPlans(d) {
 
   $('plCancel').onclick = closeModal;
   $('plOwner').onclick = ownerModal;
+  $('plAd').onclick = () => showVideoAd({
+    reward: sel,
+    onReward: async () => { try { renderPlans(await api('GET', '/api/plans')); } catch (e) {} },   /* перерисовать модалку с новым тарифом */
+  });
   $('plBuy').onclick = async () => {
     if (d.owner) {
       const b = $('plBuy'); b.disabled = true;

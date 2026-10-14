@@ -774,3 +774,46 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
 .st-user span { font-weight: 600; }
 .st-user i { color: var(--muted); font-style: normal; font-size: 12.5px; }
 
+/* ============ Видеореклама: полноэкранное видео, отсчёт и крестик ============ */
+.ad-video-root { position: fixed; inset: 0; z-index: 500; background: #05060a; overflow: hidden; animation: adPop .28s ease; }
+@keyframes adPop { from { opacity: 0; transform: scale(1.04); } }
+.ad-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #05060a; }
+.ad-top {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 30px;
+  background: linear-gradient(rgba(0,0,0,.72), transparent); color: #fff; font-size: 13px; pointer-events: none;
+}
+.ad-label { font-weight: 700; letter-spacing: .3px; }
+.ad-countdown { opacity: .85; }
+.ad-x {
+  pointer-events: auto; margin-left: auto; width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.55); background: rgba(0,0,0,.6); color: #fff; font-size: 16px;
+  display: grid; place-items: center; cursor: pointer; transition: .15s;
+}
+.ad-x:hover { background: rgba(0,0,0,.85); transform: scale(1.06); }
+.ad-x.pulse { animation: adPulse 1.2s infinite; }
+@keyframes adPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.5); } 50% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } }
+.ad-progress { position: absolute; top: calc(env(safe-area-inset-top) + 3px); left: 14px; right: 14px; height: 3px; background: rgba(255,255,255,.25); border-radius: 3px; z-index: 4; overflow: hidden; }
+.ad-progress i { display: block; height: 100%; width: 0; background: #fff; border-radius: 3px; transition: width .35s; }
+.ad-bottom { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 44px 14px calc(14px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.82)); }
+.ad-cta { display: flex; align-items: center; gap: 10px; }
+.ad-cta-ic { width: 42px; height: 42px; border-radius: 12px; background: var(--grad); color: #fff; display: grid; place-items: center; font-size: 20px; font-weight: 800; flex: none; }
+.ad-cta-txt { color: #fff; min-width: 0; flex: 1; line-height: 1.25; }
+.ad-cta-txt b { font-size: 15px; }
+.ad-cta-txt span { display: block; font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-cta-btn { flex: none; background: #fff; color: #111; font-weight: 700; font-size: 14px; padding: 9px 18px; border-radius: 999px; text-decoration: none; }
+.ad-reward-hint { margin-top: 10px; color: #ffe27a; font-size: 13px; text-align: center; font-weight: 600; }
+/* запасная анимация, если видео не загрузилось */
+.ad-fallback {
+  position: absolute; inset: 0; z-index: 1; display: grid; place-content: center; text-align: center; gap: 6px; color: #fff;
+  background: linear-gradient(135deg, #3390ec, #7b5cff, #ff6ea9, #3390ec); background-size: 300% 300%; animation: adGrad 6s linear infinite;
+}
+.ad-fallback[hidden] { display: none; }
+@keyframes adGrad { 0% { background-position: 0 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+.ad-fb-emoji { font-size: 84px; animation: adBounce .9s infinite alternate ease-in-out; }
+@keyframes adBounce { to { transform: translateY(-18px) rotate(8deg); } }
+.ad-fb-title { font-size: 34px; font-weight: 900; }
+.ad-fb-sub { font-size: 16px; opacity: .9; }
+/* подсказка на карточке тарифа «Старт»/«Плюс» */
+.plan-ad { margin-top: 8px; font-size: 12px; color: var(--accent); font-weight: 600; text-align: center; }
+
