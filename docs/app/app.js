@@ -73,9 +73,17 @@ function toast(text, err) {
   $('toasts').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = '.4s'; setTimeout(() => el.remove(), 400); }, 2600);
 }
+/* 🎨 палитра как в Telegram: у каждого — свой цвет аватара и имени в группе */
+const TG_COLORS = ['#6ec9cb', '#65aadd', '#a695e7', '#7bc862', '#e17076', '#faa774', '#e8a33d'];
+function tgColor(id) {
+  const s = String(id || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return TG_COLORS[h % TG_COLORS.length];
+}
 function avatarEl(src, name, cls = 'avatar') {
   if (src) return `<img class="${cls}" src="${esc(src)}" alt="">`;
-  return `<div class="${cls}">${esc(initials(name))}</div>`;
+  return `<div class="${cls}" style="background:${tgColor(name)}">${esc(initials(name))}</div>`;
 }
 function openModal(html) {
   $('modalBox').innerHTML = html;
@@ -1950,7 +1958,7 @@ function renderChatHeader() {
   $('btnCallVideo').hidden = c.type !== 'dm' && c.type !== 'group';
   $('chatAvatar').outerHTML = c.avatar || (other && other.avatar)
     ? `<img id="chatAvatar" class="avatar" src="${esc(c.avatar || other.avatar)}">`
-    : `<div id="chatAvatar" class="avatar">${esc(initials(c.title))}</div>`;
+    : `<div id="chatAvatar" class="avatar" style="background:${tgColor(c.title)}">${esc(initials(c.title))}</div>`;
   renderChatSub();
 }
 /* кто может публиковать и модерировать: владелец сайта, создатель чата, админ канала */
@@ -2041,7 +2049,7 @@ function msgHTML(m, gap, last) {
         ${mine && !m.deleted && (m.type === 'text') ? '<button data-act="edit" title="Изменить">✏️</button>' : ''}
         ${(mine || chatMod(state.chatById[state.current])) && !m.deleted ? '<button data-act="del" title="Удалить">🗑</button>' : ''}
       </div>
-      ${showAuthor ? `<div class="msg-author" data-profile="${esc(m.userId)}">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
+      ${showAuthor ? `<div class="msg-author" style="color:${tgColor(m.userId)}" data-profile="${esc(m.userId)}">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
       ${inner}
       ${reactions ? `<div class="reactions">${reactions}</div>` : ''}
       <div class="msg-meta">${m.edited ? '<span class="edited">изменено</span>' : ''}<span>${fmtTime(m.createdAt)}</span>
