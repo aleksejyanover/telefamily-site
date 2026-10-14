@@ -1143,7 +1143,8 @@ function connectWS() {
 function scheduleReconnect() {
   if (!state.token) return;
   state.reconnectT = Math.min(15000, (state.reconnectT || 800) * 1.7);
-  setTimeout(() => { if (state.token) connectWS(); }, state.reconnectT);
+  clearTimeout(state.reconnTo);
+  state.reconnTo = setTimeout(() => { if (state.token) connectWS(); }, state.reconnectT);
 }
 function wsSend(obj) { if (state.ws && state.ws.readyState === 1) state.ws.send(JSON.stringify(obj)); }
 
@@ -1817,7 +1818,10 @@ function handleEvent(m) {
     const chat = state.chatById[m.chatId];
     const isMine = m.msg.userId === state.me.id;
     if (state.current === m.chatId && document.querySelector('.chat-view:not([hidden])')) {
-      appendMsg(m.msg, true);
+      /* своё сообщение пришло через эфир, а локальное ещё «⏳» — заменяем его, а не добавляем второе */
+      const twin = isMine ? state.msgs.find(x => x.pending && x.id !== m.msg.id && x.type === m.msg.type &&
+        (x.text || '') === (m.msg.text || '') && Date.now() - x.createdAt < 60000) : null;
+      if (twin) replaceLocal(twin.id, m.msg); else appendMsg(m.msg, true);
       if (!isMine) api('POST', `/api/chats/${m.chatId}/read`, { before: m.msg.id }).catch(() => {});
     }
     refreshChatFromMsg(m.chatId, m.msg);
@@ -2117,23 +2121,27 @@ function removeLocal(localId) {
   if (state.current) renderMessages();
 }
 async function deliverQueued(item) {
-  const d = await api('POST', `/api/chats/${item.chatId}/messages`, item.payload);
+  /* localId — метка «это одно сообщение»: повтор после таймаута/очереди не создаст копию */
+  const d = await api('POST', `/api/chats/${item.chatId}/messages`, Object.assign({}, item.payload, { localId: item.localId }));
   replaceLocal(item.localId, d.msg);
   const c = state.chatById[item.chatId];
   if (c) { c.last = d.msg; c.unread = 0; renderChatList(); }
   return d.msg;
 }
 async function outboxFlush() {
-  if (!state.token) return;
-  const list = outboxLoad();
-  if (!list.length) return;
-  const rest = []; let sent = 0;
-  for (const item of list) {
-    if (Date.now() - (item.createdAt || 0) > 24 * 3600e3) continue;   /* старше суток — стёрли */
-    try { await deliverQueued(item); sent++; } catch (e) { rest.push(item); }
-  }
-  outboxSave(rest);
-  if (sent && !rest.length) toast('📨 Отправил всё, что накопилось без связи');
+  if (!state.token || outboxFlush.busy) return;   /* не даём двум запускам отправить одно и то же дважды */
+  outboxFlush.busy = true;
+  try {
+    const list = outboxLoad();
+    if (!list.length) return;
+    const rest = []; let sent = 0;
+    for (const item of list) {
+      if (Date.now() - (item.createdAt || 0) > 24 * 3600e3) continue;   /* старше суток — стёрли */
+      try { await deliverQueued(item); sent++; } catch (e) { rest.push(item); }
+    }
+    outboxSave(rest);
+    if (sent && !rest.length) toast('📨 Отправил всё, что накопилось без связи');
+  } finally { outboxFlush.busy = false; }
 }
 function isNetErr(e) {
   return tfOffline || /ловлю связь|Failed to fetch|NetworkError|Load failed|timed?\s*out/i.test(String((e && e.message) || ''));
@@ -2396,9 +2404,10 @@ async function sendComment() {
   if (!text) { ta.focus(); return; }
   ta.disabled = true;
   try {
-    const d = await api('POST', `/api/messages/${id}/comments`, { text });
+    const d = await api('POST', `/api/messages/${id}/comments`, { text, localId: 'c' + Date.now() + Math.random().toString(36).slice(2, 6) });
     ta.value = '';
-    renderComments(id, [...(state.comments[id] || []), d.comment]);
+    /* эфир мог принести этот же комментарий раньше ответа — не добавляем копию */
+    renderComments(id, [...(state.comments[id] || []).filter(c => c.id !== d.comment.id), d.comment]);
     ta.focus();
   } catch (e) { toast(e.message, true); }
   finally { ta.disabled = false; }
