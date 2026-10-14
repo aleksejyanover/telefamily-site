@@ -507,6 +507,7 @@ async function startApp() {
     const me = await api('GET', '/api/me');
     state.me = me.user;
     state.chatLockSet = !!me.chatLockSet;
+    loadStories();   /* после перезагрузки страницы истории тоже надо подтянуть */
   } catch (e) {
     if (e.message === 'session') {
       /* токен невалиден — убираем аккаунт с телефона и просим войти */
@@ -704,6 +705,7 @@ function svRender() {
     renderStories();
   }
   let media;
+  const caption = s.text && s.type !== 'text' ? `<div class="sv-caption">${esc(s.text)}</div>` : '';
   if (s.type === 'text') media = `<div class="sv-text" style="background:${esc(s.bg || '#3390ec')}">${esc(s.text)}</div>`;
   else if (s.type === 'video') media = `<video class="sv-media" src="${esc(fixU(s.url))}" autoplay playsinline></video>`;
   else media = `<img class="sv-media" src="${esc(fixU(s.url))}" alt="">`;
@@ -717,7 +719,7 @@ function svRender() {
         <button class="sv-btn" data-sv-del="${esc(s.id)}" title="Удалить">🗑</button>` : ''}
       <button class="sv-btn" data-sv-close="1" title="Закрыть">✕</button>
     </div>
-    ${media}
+    ${media}${caption}
     <div class="sv-tap sv-prev" data-sv-prev="1"></div><div class="sv-tap sv-next" data-sv-next="1"></div>`;
   clearTimeout(sv.timer);
   sv.timer = setTimeout(() => svGo(1), STORY_DUR[s.type] || 5000);
@@ -780,7 +782,7 @@ function storyCreateModal() {
     <div class="field"><button class="btn ghost" id="stPick" style="width:100%">🖼 Прикрепить фото или видео</button>
       <div class="sr-nick" id="stInfo" style="margin-top:6px">файл не выбран — или напиши текст ниже</div></div>
     <input type="file" id="stFile" accept="image/*,video/*" hidden>
-    <div class="field"><label>Или текст</label><textarea id="stText" rows="2" placeholder="Напиши историю…"></textarea></div>
+    <div class="field"><label>Текст — если без файла, это история целиком; с файлом — подпись под ним</label><textarea id="stText" rows="2" placeholder="Напиши историю или подпись к фото…"></textarea></div>
     <div class="field"><label>Фон для текста</label>
       <div class="st-bgs">${BGS.map((b, i) => `<span class="st-bg ${i === 0 ? 'sel' : ''}" data-bg="${b}" style="background:${b}"></span>`).join('')}</div></div>
     <div class="field"><label>Кто увидит</label>

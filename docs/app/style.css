@@ -720,6 +720,14 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
 }
 .sv-tap { position: absolute; top: 60px; bottom: 0; width: 34%; z-index: 2; cursor: pointer; }
 .sv-prev { left: 0; } .sv-next { right: 0; }
+/* подпись текста под фото/видео — как в Telegram (снизу поверх медиа) */
+.sv-caption {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 26px 18px 22px; color: #fff; font-size: 15px; line-height: 1.45;
+  text-align: center; white-space: pre-wrap; word-break: break-word;
+  background: linear-gradient(transparent, rgba(0,0,0,.78));
+  pointer-events: none;
+}
 
 /* ============ 🖼 Создание истории ============ */
 .st-bgs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
