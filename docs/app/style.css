@@ -591,6 +591,21 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .admin-msg div { margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
 .admin-verdict { font-weight: 700; font-size: 16px; color: #37d67a; }
 
+/* 📱 телефоны: строки панели переносятся — имя/пароль сверху, кнопки ниже, ничего не вылезает */
+@media (max-width: 560px) {
+  .admin-root { padding: 8px; }
+  .admin-card { max-height: 96vh; border-radius: 14px; }
+  .admin-row { flex-wrap: wrap; row-gap: 7px; }
+  .admin-who { flex-basis: calc(100% - 28px); }
+  .admin-pw { flex-basis: 100%; margin-left: 20px; }
+  .admin-btn { flex: 1; padding: 8px 8px; font-size: 12.5px; white-space: normal; text-align: center; }
+  .admin-last { flex-basis: 100%; margin-left: 20px; max-width: 100%; }
+  .admin-head { padding: 10px; gap: 6px; }
+  .admin-title { font-size: 15px; }
+  .admin-tabs button { padding: 6px 11px; font-size: 12.5px; }
+  .admin-body { padding: 8px 8px 14px; }
+}
+
 /* ------------------------------------------- 🎉 пасхалки: дождь-сюрприз и вечеринка */
 .fun-rain { position: fixed; inset: 0; pointer-events: none; z-index: 99998; overflow: hidden; }
 .fun-rain span { position: absolute; top: -44px; animation: funFall 3s linear forwards; will-change: transform; }
