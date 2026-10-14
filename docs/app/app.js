@@ -2512,7 +2512,7 @@ $('menuDrawer').addEventListener('click', e => {
   if (act === 'plus') premiumModal();
   if (act === 'installapp') {
     if (tfInstallPrompt) { tfInstallPrompt.prompt(); tfInstallPrompt = null; }
-    else toast('В Edge или Chrome: меню ⋯ → «Приложения» → «Установить TeleFamily». На Windows 🪟 — на сайте нажми «Скачать для Windows»: лаунчер сам поставит ярлык на рабочий стол');
+    else toast('В Edge или Chrome: меню ⋯ → «Приложения» → «Установить TeleFamily». На Android 📱 — «Скачать для Android» на сайте: если телефон пишет «подписи не совпадают», удали старое TeleFamily (долгое нажатие → Удалить), удали старый файл из «Загрузок» и скачай заново. На Windows 🪟 — «Скачать для Windows»: лаунчер сам поставит ярлык на рабочий стол');
   }
   if (act === 'notify') notifySetup();
   if (act === 'group') groupModal();
