@@ -2179,6 +2179,13 @@ function sendText() {
     if (clipsUnlocked()) openClips(); else toast('🔒 Секретная команда… Говорят, кто-то 5 раз тапал логотип', true);
     return;
   }
+  /* 👑 пасхалка: кто автор? /автор  /author  /создатель  /creator */
+  if (/^\/(автор|author|создатель|creator|яновер)$/i.test(text)) {
+    $('input').value = ''; autoGrow();
+    confettiBurst();
+    toast('👑 Автор TeleFamily — Алексей Яновер! Создано с любовью ❤️');
+    return;
+  }
   /* 🎉 пасхалки-команды: праздничный дождь у всех в чате
    * /pizza 🍕  /dance 💃  /gift 🎁  (русские версии тоже работают) */
   const funKind = (function (t) {
@@ -3044,6 +3051,25 @@ if (brandEl) brandEl.addEventListener('click', () => {
   if (brandTaps >= 5) { brandTaps = 0; openSafe(); }
 });
 
+/* 📱 авто-обновление: сервер перезапустился с новой версией — вкладка перезагружается сама.
+   Во время звонка или записи голосового не трогаем. */
+async function tfUpdateCheck() {
+  try {
+    const d = await api('GET', '/api/ping');
+    if (!d || !d.boot) return;
+    let prev = null;
+    try { prev = localStorage.getItem('tf_boot'); } catch (e) {}
+    if (prev && prev !== String(d.boot) && !state.call && !state.recording) {
+      toast('📱 Вышла новая версия — обновляю приложение…');
+      setTimeout(() => location.reload(), 1600);
+      return;
+    }
+    try { localStorage.setItem('tf_boot', String(d.boot)); } catch (e) {}
+  } catch (e) {}
+}
+setTimeout(tfUpdateCheck, 5000);
+setInterval(tfUpdateCheck, 300000);   /* проверка каждые 5 минут */
+
 function openSafe() {
   if (Date.now() < safeLockT) { toast('🔒 Сейф остыл — подожди немного', true); return; }
   safeBuf = '';
@@ -3053,6 +3079,7 @@ function openSafe() {
     <div class="safe-dots" id="safeDots"><i></i><i></i><i></i><i></i></div>
     <div class="safe-pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" data-n="${n}">${n}</button>`).join('')}
       <button type="button" data-n="C">C</button><button type="button" data-n="0">0</button><button type="button" data-n="B">⌫</button></div>
+    <p class="sub" style="text-align:center;margin:12px 0 0">👑 Создано с любовью —<br><b style="color:var(--accent2)">автор TeleFamily: Алексей Яновер</b></p>
     <div class="modal-actions"><button class="btn ghost" id="safeClose">Закрыть</button></div></div>`);
   $('safeClose').onclick = closeModal;
   box.querySelector('.safe').addEventListener('click', e => {
