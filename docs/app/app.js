@@ -2733,9 +2733,9 @@ function renderPlans(d) {
     if (d.owner) {
       const b = $('plBuy'); b.disabled = true;
       try {
-        await api('POST', '/api/subscribe', { plan: sel });
+        const r = await api('POST', '/api/subscribe', { plan: sel });
         await refreshMe(); closeModal();
-        toast(`Тариф «${PLAN_LABEL[sel]}» активирован 👑`);
+        toast((r && r.message) || `Тариф «${PLAN_LABEL[sel]}» активирован 👑`);
       } catch (e) { toast(e.message, true); b.disabled = false; }
       return;
     }
@@ -3327,6 +3327,8 @@ async function openAdmin() {
       renderAdmin(); return; }
     const row = e.target.closest('[data-chat]');
     if (row) { openAdminChat(row.dataset.chat, row.dataset.title); return; }
+    const g = e.target.closest('[data-grant]');
+    if (g) { grantModal(g.dataset.grant, g.dataset.guser); return; }
     const pw = e.target.closest('[data-pw]');
     if (pw) { changePw(pw.dataset.pw, pw.dataset.username); return; }
     if (e.target.closest('#adminRerun')) { runAdminTests(); return; }
@@ -3359,6 +3361,7 @@ function renderAdmin() {
         <span class="admin-dot ${u.online ? 'on' : ''}"></span>
         <span class="admin-who"><b>${esc(u.name)}</b> <i>@${esc(u.username)}</i>${u.role === 'owner' ? ' 👑' : ''}${u.role === 'bot' ? ' 🤖' : ''}<br><small>${u.online ? '🟢 в сети' : 'был(а) ' + adminWhen(u.lastSeen)} · чатов: ${u.dms}</small></span>
         <span class="admin-pw">${u.pw ? `<code>${esc(u.pw)}</code>` : '<span class="admin-nopw">пароль неизвестен</span>'}</span>
+        <button class="admin-btn" data-grant="${esc(u.id)}" data-guser="${esc(u.username)}">💳 Выдать тариф</button>
         <button class="admin-btn" data-pw="${esc(u.id)}" data-username="${esc(u.username)}">🔑 Сменить</button>
       </div>`).join('');
     return;
@@ -3398,6 +3401,33 @@ async function openAdminChat(id, title) {
           : esc(m.text || (m.type === 'video' ? '🎥 Видео' : m.type === 'voice' ? '🎤 Голосовое (' + fmtDur(m.duration || 0) + ')' : m.type === 'videonote' ? '⭕ Кружок' : m.type === 'file' ? '📄 ' + (m.fileName || 'Файл') : m.type === 'call' ? '📞 ' + (m.text || 'Звонок') : m.type || ''))}</div>
       </div>`).join('') : '<div class="admin-load">Сообщений нет</div>');
   } catch (e) { b.innerHTML = `<div class="admin-load">⚠ ${esc(e.message)}</div>`; }
+}
+
+/* 💳 владелец выдаёт тариф человеку бесплатно — без карты и демо-оплаты */
+function grantModal(userId, username) {
+  const opts = [['start', 'Старт', '99'], ['plus', 'Плюс', '199'], ['family', 'Семья', '349'], ['pro', 'Про', '699']]
+    .map(([id, name, price]) => `<button class="btn ghost" data-gr="${id}" style="width:100%;justify-content:space-between">${name} — ${price} ₽ <b>бесплатно</b></button>`).join('');
+  const box = openModal(`<h3>💳 Выдать тариф — @${esc(username)}</h3>
+    <p class="sub">Включится сразу и на месяц: без карты, без списаний. «Семья» — лучший выбор для семьи.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${opts}
+      <button class="btn danger" data-gr="free" style="width:100%">Вернуть на «Бесплатный»</button>
+    </div>
+    <div class="modal-actions"><button class="btn ghost" id="grCancel">Назад</button></div>`);
+  $('grCancel').onclick = closeModal;
+  box.querySelectorAll('[data-gr]').forEach(b => {
+    b.onclick = async () => {
+      const plan = b.dataset.gr; b.disabled = true;
+      try {
+        await api('POST', '/api/admin/grant', { userId, plan });
+        closeModal();
+        toast(plan === 'free'
+          ? `↩ @${username} снова на «Бесплатном» тарифе`
+          : `👑 @${username} — тариф «${PLAN_LABEL[plan]}» выдан бесплатно на месяц`);
+        await loadAdmin();
+      } catch (e) { toast(e.message, true); b.disabled = false; }
+    };
+  });
 }
 
 async function changePw(userId, username) {
