@@ -632,6 +632,7 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
   cursor: pointer; font-size: 13px; line-height: 1.35;
 }
 .ad-card:active { transform: scale(.99); }
+a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* карточка-ссылка в магазин */
 .ad-tag {
   flex: none; align-self: flex-start; margin-top: 2px;
   font-size: 9px; letter-spacing: .1em; text-transform: uppercase;

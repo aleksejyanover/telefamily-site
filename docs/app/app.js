@@ -582,25 +582,63 @@ function previewText(c) {
 
 /* реклама на бесплатном тарифе: карточка в списке чатов и полоса над вводом */
 function showAds() { return !!(state.me && !state.me.premium); }
+
+/* пул рекламы: карточка на КАЖДЫЙ тариф + игры/приложения из магазинов.
+   Тап по приложению — настоящая ссылка: iOS → App Store, остальное → Google Play. */
+const AD_TARIFFS = [
+  ['⚠ На бесплатном тарифе <b>реклама</b>, файлы до 100 МБ и группы до 10 человек', 'Любой тариф снимает рекламу и все лимиты сразу'],
+  ['📢 Тариф <b>«Старт» — 99 ₽/мес</b>: без рекламы, файлы до 1 ГБ', 'Чатов и групп — до 20, участников до 50'],
+  ['⭐ Тариф <b>«Плюс» — 199 ₽/мес</b>: без рекламы, файлы до 2 ГБ', 'Звезда у имени, группы до 100 человек'],
+  ['👨‍👩‍👧 Тариф <b>«Семья» — 349 ₽/мес</b>: без рекламы, группы до 200 человек', 'Большие семьи, чаты и каналы без ограничений'],
+  ['🚀 Тариф <b>«Про» — 699 ₽/мес</b>: без рекламы, файлы до 5 ГБ', 'До 1000 чатов и 500 человек в группе — всё без лимита'],
+];
+const AD_APPS = [
+  { icon: '🎮', name: 'Clash of Clans', text: 'строй базу и воюй кланами', ios: 'id529479190', pkg: 'com.supercell.clashofclans' },
+  { icon: '🃏', name: 'Clash Royale', text: 'королевские бои один на один', ios: 'id1053012308', pkg: 'com.supercell.clashroyale' },
+  { icon: '🎵', name: 'TikTok', text: 'короткие видео, которые залипают', ios: 'id835599320', pkg: 'com.zhiliaoapp.musically' },
+  { icon: '📺', name: 'YouTube', text: 'клипы, музыка и прямые эфиры', ios: 'id544007664', pkg: 'com.google.android.youtube' },
+  { icon: '📸', name: 'Instagram', text: 'фото, сторис и переписка', ios: 'id389801252', pkg: 'com.instagram.android' },
+  { icon: '🏆', name: 'Roblox', text: 'миллионы игр в одном приложении', ios: 'id431946152', pkg: 'com.roblox.client' },
+  { icon: '🍬', name: 'Candy Crush Saga', text: 'сложи три в ряд и пройди уровни', ios: 'id553834731', pkg: 'com.king.candycrushsaga' },
+  { icon: '🏃', name: 'Subway Surfers', text: 'беги по рельсам и уворачивайся', ios: 'id512939461', pkg: 'com.kiloo.subwaysurf' },
+];
+function storeLink(app) {
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  return {
+    url: ios ? `https://apps.apple.com/app/${app.ios}` : `https://play.google.com/store/apps/details?id=${app.pkg}`,
+    store: ios ? 'App Store' : 'Google Play',
+  };
+}
 function adCardHTML() {
   if (!showAds()) return '';
-  const ads = [
-    ['📢 Хочешь <b>без рекламы</b>? Платные тарифы убирают её навсегда', 'Файлы до 5 ГБ, группы до 500 человек, все лимиты сняты'],
-    ['⬇️ На бесплатном файл — <b>максимум 100 МБ</b>', 'На «Старт» уже 1 ГБ, на «Про» — 5 ГБ'],
-    ['👥 Бесплатный: <b>3 чата и группы</b>, в группе до 10 человек', 'Тарифы «Старт», «Плюс», «Семья», «Про» снимают лимиты'],
-  ];
-  const a = ads[Math.floor(Date.now() / 3600000) % ads.length];
-  return `<div class="ad-card" data-ad="1">
-    <span class="ad-tag">реклама</span>
-    <span class="ad-text"><b>${a[0]}</b><br><span class="ad-sub">${a[1]}</span></span>
-    <button class="btn ghost ad-btn" data-ad-go="1">Тарифы</button>
-  </div>`;
+  const pool = [];
+  AD_TARIFFS.forEach(t => pool.push({ tag: 'тарифы', head: t[0], sub: t[1], btn: 'Смотреть тарифы', href: null }));
+  AD_APPS.forEach(a => {
+    const s = storeLink(a);
+    pool.push({ tag: 'реклама', head: `${a.icon} <b>${a.name}</b>`,
+      sub: `${a.text} · откроется ${s.store} — там кнопка «Установить»`,
+      btn: 'Установить', href: s.url });
+  });
+  const a = pool[Math.floor(Date.now() / 1800000) % pool.length];   /* ротация каждые 30 минут */
+  const inner = `<span class="ad-tag">${a.tag}</span>
+    <span class="ad-text"><b>${a.head}</b><br><span class="ad-sub">${a.sub}</span></span>
+    <span class="btn ghost ad-btn">${a.btn}</span>`;
+  return a.href
+    ? `<a class="ad-card" data-ad="app" href="${esc(a.href)}" target="_blank" rel="noopener">${inner}</a>`
+    : `<div class="ad-card" data-ad="tariff">${inner}</div>`;
 }
 function bindAdCards(root) {
-  /* одно делегирование на весь документ: карточка или кнопка → экран тарифов */
+  /* одно делегирование на весь документ.
+     data-ad="tariff" → экран тарифов; data-ad="app" — обычная ссылка,
+     её откроет браузер/система → магазин с кнопкой установки. */
   if (bindAdCards.done) return;
   bindAdCards.done = true;
-  document.addEventListener('click', e => { if (e.target.closest('[data-ad]')) premiumModal(); });
+  document.addEventListener('click', e => {
+    const ad = e.target.closest('[data-ad]');
+    if (!ad || ad.dataset.ad !== 'tariff') return;
+    e.preventDefault();
+    premiumModal();
+  });
 }
 bindAdCards();
 
