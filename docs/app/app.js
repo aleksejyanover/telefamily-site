@@ -2457,6 +2457,13 @@ function profileModal() {
     <input type="file" id="avatarFile" accept="image/*" hidden>
     <div class="field"><label>Имя</label><input id="pfName" value="${esc(m.name)}"></div>
     <div class="field"><label>О себе</label><textarea id="pfBio" rows="2" placeholder="Пара слов о себе">${esc(m.bio || '')}</textarea></div>
+    <div class="field"><label>ID аккаунта</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="pfId" value="${esc(m.id)}" readonly onclick="this.select()" style="flex:1;min-width:0">
+        <button class="btn ghost" id="pfIdCopy" style="flex:none;padding:9px 12px" title="Скопировать ID">📋</button>
+      </div>
+      <div class="sr-nick" style="margin-top:6px">Нужен для API, ботов и панели владельца. Нажми 📋 — скопируется</div>
+    </div>
     <div class="field"><label>Новый пароль (необязательно)</label><input id="pfPass" type="password" placeholder="оставь пустым, если не меняешь"></div>
     ${m.owner ? `<div class="field" style="border-top:1px solid var(--line);padding-top:12px">
       <label>🔒 Пароль на закрытые чаты ${state.chatLockSet ? '· задан' : ''}</label>
@@ -2474,6 +2481,13 @@ function profileModal() {
     </div>
     ${m.premium && !m.owner ? '<div style="text-align:center;margin-top:14px"><button class="btn danger" id="pfUnsub" style="padding:8px 16px">Отменить подписку</button></div>' : ''}`);
   $('pickAvatar').onclick = () => $('avatarFile').click();
+  $('pfIdCopy').onclick = () => {
+    const id = $('pfId').value;
+    try {
+      navigator.clipboard.writeText(id);
+      toast('📋 ID скопирован: ' + id);
+    } catch (e) { $('pfId').select(); toast('ID выделен — нажми Cmd+C'); }
+  };
   attachPartyTaps();   /* 🎉 пасхалка: 3 тапа по аватару — вечеринка */
   $('avatarFile').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
