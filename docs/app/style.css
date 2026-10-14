@@ -303,8 +303,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
   outline: none; font-size: 15px; resize: vertical;
 }
 .modal .field input:focus, .modal .field textarea:focus { border-color: var(--accent); }
-.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
-.modal-actions .btn { flex: 1; }
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.modal-actions .btn { flex: 1; min-width: 120px; }
 .close-x { float: right; color: var(--muted); font-size: 20px; line-height: 1; }
 
 .search-result { display: flex; gap: 11px; align-items: center; padding: 10px; border-radius: 13px; cursor: pointer; }
