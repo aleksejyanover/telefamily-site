@@ -12,16 +12,19 @@
   --muted: #8b97ad;
   --line: #232d42;
   --bubble-in: #1c2436;
-  --bubble-out: linear-gradient(135deg, #3f6fe0, #2b9bd6);
+  --bubble-out: #3f6fe0;
   --danger: #ff5c6c;
   --ok: #3fd08a;
   --radius: 14px;
   --shadow: 0 10px 40px rgba(0,0,0,.45);
 }
+/* светлая тема — один-в-один с Telegram (день): белый фон, синий #3390ec */
 [data-theme="light"] {
-  --bg: #dfe7f3; --side: #ffffff; --panel: #ffffff; --panel2: #f1f4fa;
-  --text: #17202f; --muted: #6d7a90; --line: #e2e8f2;
-  --bubble-in: #ffffff; --shadow: 0 10px 40px rgba(20,30,60,.16);
+  --accent: #3390ec; --accent2: #2aabee; --grad: #3390ec;
+  --bg: #ffffff; --side: #ffffff; --panel: #ffffff; --panel2: #f4f4f5;
+  --text: #000000; --muted: #707579; --line: #dadce0;
+  --bubble-in: #f4f4f5; --bubble-out: #3390ec;
+  --shadow: 0 10px 40px rgba(20,30,60,.16);
 }
 html, body { height: 100%; margin: 0; }
 body {
