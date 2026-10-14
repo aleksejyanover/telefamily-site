@@ -637,4 +637,101 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
 .ad-text { flex: 1; min-width: 0; }
 .ad-sub { color: var(--muted); font-size: 12px; }
 .ad-btn { flex: none; padding: 6px 10px; font-size: 12px; }
-.ad-bar .ad-card { margin: 6px 8px; padding: 8px 8px 8px 10px; }
+/* Хвосты пузырей как в Telegram: рисуем на .msg — у .bubble overflow:hidden */
+.msg .bubble { border-radius: 12px; }
+.msg.in .bubble, .msg.out .bubble { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+.msg.last.out .bubble { border-top-right-radius: 6px; }
+.msg.last.in .bubble { border-top-left-radius: 6px; }
+.msg.last.out::after {
+  content: ''; position: absolute; top: 0; right: 0; width: 9px; height: 14px;
+  background: var(--bubble-out); clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.msg.last.in::after {
+  content: ''; position: absolute; top: 0; left: 38px; width: 9px; height: 14px;
+  background: var(--bubble-in); clip-path: polygon(100% 0, 100% 100%, 0 0);
+}
+
+/* ============ 🖼 Истории: полоса над списком чатов ============ */
+.stories-bar {
+  display: flex; gap: 11px; padding: 9px 12px 11px;
+  overflow-x: auto; scrollbar-width: none; flex: none;
+  border-bottom: 1px solid var(--line);
+}
+.stories-bar::-webkit-scrollbar { display: none; }
+.story-circle { flex: none; width: 64px; text-align: center; cursor: pointer; user-select: none; }
+.story-ring {
+  position: relative; display: inline-block; width: 58px; height: 58px;
+  border-radius: 50%; padding: 3px;
+  background: conic-gradient(#e17076, #e8a33d, #7bc862, #3390ec, #8774e1, #e17076);
+}
+.story-circle .avatar { width: 100%; height: 100%; border: 0 !important; display: block; }
+.story-circle:not(.unseen):not(.add):not(.mine) .story-ring { background: var(--line); }
+.story-circle.add .story-ring { background: none; border: 2px dashed var(--line); padding: 0; }
+.story-plus {
+  position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px;
+  background: var(--accent); color: #fff; border-radius: 50%;
+  border: 2px solid var(--side); font-style: normal; font-size: 15px;
+  line-height: 17px; display: flex; align-items: center; justify-content: center;
+}
+.story-circle.add .story-plus {
+  position: static; width: 34px; height: 34px; margin: 12px auto;
+  border: 0; font-size: 24px; line-height: 34px;
+}
+.story-circle.add .story-ring { display: flex; align-items: center; justify-content: center; height: 58px; }
+.story-name {
+  display: block; font-size: 11px; color: var(--muted);
+  margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.story-circle.unseen .story-name { color: var(--text); }
+
+/* ============ 🖼 Просмотрщик историй ============ */
+.story-viewer {
+  position: fixed; inset: 0; z-index: 300; background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.sv-progress { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; gap: 4px; z-index: 3; }
+.sv-seg { flex: 1; height: 3px; background: rgba(255,255,255,.3); border-radius: 2px; overflow: hidden; }
+.sv-seg.done { background: #fff; }
+.sv-seg.run i { display: block; height: 100%; background: #fff; width: 0; animation: svfill linear forwards; }
+@keyframes svfill { from { width: 0; } to { width: 100%; } }
+.sv-head {
+  position: absolute; top: 18px; left: 0; right: 0; z-index: 3;
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: linear-gradient(rgba(0,0,0,.65), transparent);
+}
+.sv-who { flex: 1; min-width: 0; color: #fff; line-height: 1.25; }
+.sv-who b { display: block; font-size: 14px; font-weight: 600; }
+.sv-who span { font-size: 11.5px; color: rgba(255,255,255,.75); }
+.sv-count { color: rgba(255,255,255,.85); font-size: 12.5px; margin-right: 2px; }
+.sv-btn {
+  flex: none; color: #fff; font-size: 13px; background: rgba(255,255,255,.16);
+  border-radius: 8px; padding: 5px 9px; margin-left: 2px;
+}
+.sv-btn:active { background: rgba(255,255,255,.3); }
+.sv-media { max-width: min(430px, 100vw); max-height: 100vh; width: 100%; height: 100%; object-fit: contain; }
+.sv-text {
+  max-width: min(430px, 100vw); width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px 34px; color: #fff; font-size: 24px; line-height: 1.45;
+  text-align: center; word-break: break-word;
+}
+.sv-tap { position: absolute; top: 60px; bottom: 0; width: 34%; z-index: 2; cursor: pointer; }
+.sv-prev { left: 0; } .sv-next { right: 0; }
+
+/* ============ 🖼 Создание истории ============ */
+.st-bgs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.st-bg {
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent;
+}
+.st-bg.sel { border-color: var(--text); outline: 2px solid var(--accent); outline-offset: 2px; }
+.st-users { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.st-user {
+  display: flex; align-items: center; gap: 9px; padding: 7px 8px;
+  border-radius: 10px; cursor: pointer; font-size: 14px;
+}
+.st-user:active { background: var(--panel2); }
+.st-user input { accent-color: var(--accent); width: 17px; height: 17px; }
+.st-user span { font-weight: 600; }
+.st-user i { color: var(--muted); font-style: normal; font-size: 12.5px; }
+
