@@ -104,6 +104,49 @@ function notify(title, body) {
   }
 }
 
+/* ---- 🔔 Push-уведомления (Web Push): сообщения и звонки приходят,
+   даже когда приложение закрыто. Включение: ☰ → 🔔 Уведомления ---- */
+function urlB64ToUint8(base64) {
+  const pad = '='.repeat((4 - base64.length % 4) % 4);
+  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function notifySetup(silent) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) {
+    if (!silent) toast(IS_APP
+      ? 'В приложении для Android уведомлениями ведает сам Android — они уже работают. Push есть на сайте: открой TeleFamily в Chrome и включи здесь'
+      : 'Этот браузер не умеет push-уведомления', true);
+    return null;
+  }
+  if (Notification.permission === 'denied') {
+    if (!silent) toast('Уведомления заблокированы — разреши их в настройках сайта (замочек 🔒 или i у адреса) и нажми ещё раз', true);
+    return null;
+  }
+  try {
+    const reg = await navigator.serviceWorker.register('./sw.js');
+    let perm = Notification.permission;
+    if (perm !== 'granted') perm = await Notification.requestPermission();
+    if (perm !== 'granted') { if (!silent) toast('Уведомления не разрешены', true); return null; }
+    const d = await api('GET', '/api/push/key');
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(d.key) });
+    await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+    state.pushEndpoint = sub.endpoint;
+    if (!silent) toast('🔔 Уведомления включены: сообщения, голосовые и видеозвонки будут приходить, даже когда приложение закрыто');
+    return sub;
+  } catch (e) {
+    if (!silent) toast('Не удалось включить уведомления: ' + e.message, true);
+    return null;
+  }
+}
+/* клик по push-уведомлению при открытом приложении — распахнуть нужный чат */
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  const d = e.data || {};
+  if (d.type === 'notification-click' && d.chatId && state.token) openChat(d.chatId).catch(() => {});
+});
+
 /* -------------------------------------------------------------- API */
 const IS_APP = !!(window.Capacitor);
 function apiBase() {
@@ -442,6 +485,9 @@ $('formGithub').addEventListener('submit', async e => {
 
 function logout(silent) {
   tfPushOff();
+  /* убираем подписку push этого браузера — пуши не «перетекут» на другого, кто зайдёт */
+  if (state.pushEndpoint && state.token) api('POST', '/api/push/unsubscribe', { endpoint: state.pushEndpoint }).catch(() => {});
+  state.pushEndpoint = null;
   localStorage.removeItem('tg_token');
   try { localStorage.removeItem('tf_last'); } catch (e) {}
   state.token = null; state.me = null;
@@ -531,6 +577,18 @@ async function startApp() {
   connectWS();
   tfPushSync(); tfPushPending();   /* фоновый сервис: уведомления и звонки даже с закрытым приложением */
   outboxFlush().catch(() => {});   /* вдруг осталась накопленная очередь с прошлого раза */
+  /* разрешение на уведомления уже получено → подписываемся молча: push будет работать
+     и когда приложение закрыто (сообщения, видеозвонки и обычные звонки) */
+  if (window.Notification && Notification.permission === 'granted') notifySetup(true);
+  /* открыли по клику из push-уведомления (?chat=…) — сразу в нужный чат */
+  try {
+    const qChat = new URLSearchParams(location.search).get('chat');
+    if (qChat && state.chatById[qChat]) {
+      openChat(qChat).catch(() => {});
+      const u2 = new URL(location.href); u2.searchParams.delete('chat');
+      history.replaceState(null, '', u2.pathname + u2.search);
+    }
+  } catch (e) {}
 }
 
 function renderMe() {
@@ -2456,6 +2514,7 @@ $('menuDrawer').addEventListener('click', e => {
     if (tfInstallPrompt) { tfInstallPrompt.prompt(); tfInstallPrompt = null; }
     else toast('В Edge или Chrome: меню ⋯ → «Приложения» → «Установить TeleFamily». На Windows 🪟 — на сайте нажми «Скачать для Windows»: лаунчер сам поставит ярлык на рабочий стол');
   }
+  if (act === 'notify') notifySetup();
   if (act === 'group') groupModal();
   if (act === 'channel') channelModal();
   if (act === 'theme') {
