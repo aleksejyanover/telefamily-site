@@ -721,7 +721,7 @@ function showVideoAd(opts) {
   const root = document.createElement('div');
   root.className = 'ad-video-root';
   root.innerHTML = `
-    <video class="ad-video" playsinline webkit-playsinline preload="auto" src="${fixU('/uploads/ad-family.mp4')}"></video>
+    <video class="ad-video" playsinline webkit-playsinline preload="auto" src="${fixU('/uploads/ad-family.mp4?v=2')}"></video>
     <div class="ad-fallback" hidden><div class="ad-fb-emoji">📺</div><div class="ad-fb-title">Реклама</div><div class="ad-fb-sub">Смотрите — это быстро!</div></div>
     <div class="ad-top">
       <span class="ad-label">📡 Реклама</span>
@@ -754,23 +754,24 @@ function showVideoAd(opts) {
     if (x.hidden) { x.hidden = false; x.classList.add('pulse'); }
   }, 1000);
   /* запасная анимация, если видео не загрузилось (нет файла или нет кодека) */
-  const toFallback = () => {
-    if (closed || fallbackOn || vid.duration) return;
+  const toFallback = (force) => {
+    if (closed || fallbackOn) return;
+    if (!force && vid.duration) return;   /* длительность известна — видео в порядке, не прячем */
     fallbackOn = true;
     vid.hidden = true;
     root.querySelector('.ad-fallback').hidden = false;
     bar.style.transition = 'width 12s linear';
     bar.style.width = '100%';
   };
-  vid.addEventListener('error', toFallback);
-  setTimeout(toFallback, 3000);
+  vid.addEventListener('error', () => toFallback(true));
+  setTimeout(() => toFallback(false), 3000);
   vid.addEventListener('timeupdate', () => {
     if (vid.duration) bar.style.width = Math.min(100, vid.currentTime / vid.duration * 100) + '%';
   });
   /* звук включаем: ролик открывается по тапу — autoplay со звуком разрешён */
   vid.muted = false;
   vid.volume = 1;
-  vid.play().catch(() => { vid.muted = true; vid.play().catch(toFallback); });
+  vid.play().catch(() => { vid.muted = true; vid.play().catch(() => toFallback(true)); });
   function close() {
     if (closed) return;
     closed = true;
