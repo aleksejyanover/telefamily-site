@@ -2299,8 +2299,9 @@ $('messages').addEventListener('click', async e => {
   const view = e.target.closest('[data-view]');
   if (view) return showViewer(`<img src="${view.dataset.view}">`);
   const viewV = e.target.closest('[data-viewvideo]');
-  if (viewV && !e.target.closest('video, .play-btn')) return;
-  if (viewV && e.target.closest('.note-play')) return showViewer(`<video src="${viewV.dataset.viewvideo}" controls autoplay>`);
+  if (viewV && viewV.classList.contains('videonote'))   /* ⭕ кружок: тап по кругу или ▶ — открыть просмотр */
+    return showViewer(`<video src="${esc(viewV.dataset.viewvideo)}" controls autoplay playsinline>`);
+  if (viewV && !e.target.closest('video')) return;   /* обычное видео: вне плеера — игнор, внутри работают нативные кнопки */
   const react = e.target.closest('[data-react]');
   if (react) return addReaction(msgEl.dataset.id, react.dataset.react);
   const tool = e.target.closest('[data-act]');
@@ -2322,6 +2323,17 @@ function showViewer(html) {
 }
 $('viewerClose').onclick = () => { $('mediaViewer').hidden = true; $('viewerBody').innerHTML = ''; };
 $('mediaViewer').addEventListener('click', e => { if (e.target === $('mediaViewer')) $('viewerClose').click(); });
+
+/* ⭕ у webm, записанных в браузере, длительность = ∞: без фикса кружок стоит «на заставке»,
+   прогресс не идёт и видео не стартует. Подсматриваем длительность перемоткой в конец и возвратом в 0. */
+document.addEventListener('loadedmetadata', e => {
+  const v = e.target;
+  if (!v || v.tagName !== 'VIDEO' || isFinite(v.duration)) return;
+  const finish = () => { if (isFinite(v.duration)) { clearTimeout(to); try { v.currentTime = 0; } catch (err) {} } };
+  const to = setTimeout(finish, 4000);   /* не вышло — оставляем как есть, главное не зависнуть */
+  v.addEventListener('durationchange', finish, { once: true });
+  try { v.currentTime = 1e10; } catch (err) { clearTimeout(to); }
+}, true);
 
 const REACTIONS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
 async function addReaction(id, emoji) {
