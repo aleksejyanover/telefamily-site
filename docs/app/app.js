@@ -3069,6 +3069,7 @@ async function tfUpdateCheck() {
     let prev = null;
     try { prev = localStorage.getItem('tf_boot'); } catch (e) {}
     if (prev && prev !== String(d.boot) && !state.call && !state.recording) {
+      try { localStorage.setItem('tf_boot', String(d.boot)); } catch (e) {}   /* запоминаем сразу — чтобы не зациклиться на перезагрузках */
       toast('📱 Вышла новая версия — обновляю приложение…');
       setTimeout(() => location.reload(), 1600);
       return;
