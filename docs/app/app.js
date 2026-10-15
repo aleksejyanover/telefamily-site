@@ -287,7 +287,7 @@ function fixU(o) {
 
 /* ---- потеря связи: баннер и фоновое восстановление (связь возвращается сама) ---- */
 let tfOffline = false, tfOfflineT = null;
-function tfBanner(on) {
+function tfBanner(on, text) {
   let b = document.getElementById('tfOffline');
   if (!b) {
     if (!on) return;
@@ -295,17 +295,25 @@ function tfBanner(on) {
     b.id = 'tfOffline';
     b.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99999;' +
       'background:#1b2436;color:#ffd166;border:1px solid #33415f;border-radius:14px;' +
-      'padding:9px 18px;font:600 14px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;' +
-      'box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none';
+      'padding:9px 18px;font:600 14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.45);pointer-events:none;max-width:92vw;text-align:center;' +
+      'white-space:pre-line';
     (document.body || document.documentElement).appendChild(b);
   }
-  b.textContent = '🔄 Секунду… ловлю связь';
+  b.textContent = text || '🔄 Секунду… ловлю связь';
   b.style.display = on ? 'block' : 'none';
 }
 function tfGoOffline() {
   if (tfOffline) return;
   tfOffline = true;
   tfBanner(true);
+  /* если связь не вернулась быстро — говорим честно: сервер молчит,
+   * возможно, компьютер выключен (страница при этом продолжает сама пробовать) */
+  const longT = setTimeout(() => {
+    if (tfOffline) tfBanner(true,
+      '📵 Сервер не отвечает — возможно, компьютер выключен или нет интернета\n' +
+      'Не закрывай страницу: проверяю каждые 2.5 секунды, всё подхватится само');
+  }, 8000);
   const tick = async () => {
     tfOfflineT = null;
     try {
