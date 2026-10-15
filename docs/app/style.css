@@ -817,3 +817,18 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
 /* подсказка на карточке тарифа «Старт»/«Плюс» */
 .plan-ad { margin-top: 8px; font-size: 12px; color: var(--accent); font-weight: 600; text-align: center; }
 
+/* ---------- промо на экране входа: о приложении и авторе (без эмодзи) ---------- */
+.promo { width: min(720px, 94vw); margin: 16px auto 30px; }
+.promo-card { background: var(--panel); border: 1px solid var(--line, #e4e8ee); border-radius: 20px; padding: 22px 20px; box-shadow: 0 10px 30px rgba(0,0,0,.10); }
+.promo-text h2 { margin: 0 0 8px; font-size: 19px; letter-spacing: .4px; }
+.promo-text p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.promo-author { margin-top: 12px; padding: 9px 12px; border-left: 3px solid var(--accent); background: rgba(51,144,236,.08); border-radius: 0 10px 10px 0; font-size: 13px; font-weight: 700; letter-spacing: .3px; }
+.promo-shots { display: flex; gap: 12px; margin-top: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.promo-shots figure { margin: 0; flex: 0 0 auto; scroll-snap-align: start; }
+.promo-shots img { width: 132px; height: 234px; object-fit: cover; border-radius: 14px; border: 1px solid var(--line, #e4e8ee); display: block; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.promo-shots figcaption { margin-top: 6px; font-size: 11px; text-align: center; color: var(--muted); }
+@media (min-width: 760px) {
+  .promo-shots { justify-content: center; }
+  .promo-shots img { width: 156px; height: 277px; }
+}
+
