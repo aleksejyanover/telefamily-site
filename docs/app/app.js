@@ -640,12 +640,13 @@ function indexChats() {
   }
 }
 function sortChats() {
-  state.chats.sort((a, b) => (b.last ? b.last.createdAt : b.createdAt) - (a.last ? a.last.createdAt : a.createdAt));
+  state.chats.sort((a, b) => (a.type === 'saved' ? -1 : b.type === 'saved' ? 1 :
+    (b.last ? b.last.createdAt : b.createdAt) - (a.last ? a.last.createdAt : a.createdAt)));
 }
 
 function previewText(c) {
   const l = c.last;
-  if (!l) return 'Нет сообщений';
+  if (!l) return c.type === 'saved' ? 'Пришли сюда любое сообщение кнопкой 🔖' : 'Нет сообщений';
   const who = l.userId === state.me.id ? 'Ты: ' : (c.type === 'group' ? l.authorName + ': ' : '');
   if (l.deleted) return who + '🗑 Сообщение удалено';
   const body = {
@@ -1089,6 +1090,10 @@ function chatLockPrompt(chat) {
   $('lkCancel').onclick = closeModal;
 }
 
+/* 💾 «Избранное» (как Saved Messages в Telegram): закладка вместо аватара */
+const BOOKMARK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11a1 1 0 0 1 1 1v16.2l-6.5-3.8-6.5 3.8V4.5a1 1 0 0 11-1z"/></svg>';
+function savedAva(extra) { return `<div class="avatar bookmark-ava ${extra || ''}">${BOOKMARK_SVG}</div>`; }
+
 async function renderChatList() {
   sortChats();
   const q = $('search').value.trim().toLowerCase();
@@ -1103,7 +1108,7 @@ async function renderChatList() {
       let sub = '';
       if (typingHere) sub = '<i style="font-style:normal">печатает…</i>';
       return `<div class="chat-item ${state.current === c.id ? 'active' : ''}" data-id="${c.id}">
-        <div class="avatar-wrap">${avatarEl(av, c.title)}${online ? '<span class="online-dot"></span>' : ''}</div>
+        <div class="avatar-wrap">${c.type === 'saved' ? savedAva() : avatarEl(av, c.title)}${online ? '<span class="online-dot"></span>' : ''}</div>
         <div class="ci-body">
           <div class="ci-top"><span class="ci-name">${esc(c.title)}${c.type === 'group' ? ' <span style="opacity:.6">👥</span>' : c.type === 'channel' ? ' <span style="opacity:.6">📢</span>' : ''}</span>
           <span class="ci-meta">${c.last ? fmtTime(c.last.createdAt) : ''}</span></div>
@@ -2066,10 +2071,13 @@ function markRead(id) {
 function renderChatHeader() {
   const c = state.chatById[state.current]; if (!c) return;
   const other = c.type === 'dm' ? c.members.find(u => u.id !== state.me.id) : null;
+  const isSaved = c.type === 'saved';
   $('chatTitle').textContent = c.title;
-  $('btnCallAudio').hidden = c.type !== 'dm' && c.type !== 'group';
-  $('btnCallVideo').hidden = c.type !== 'dm' && c.type !== 'group';
-  $('chatAvatar').outerHTML = c.avatar || (other && other.avatar)
+  $('btnCallAudio').hidden = isSaved || (c.type !== 'dm' && c.type !== 'group');
+  $('btnCallVideo').hidden = isSaved || (c.type !== 'dm' && c.type !== 'group');
+  $('chatAvatar').outerHTML = isSaved
+    ? `<div id="chatAvatar" class="avatar bookmark-ava">${BOOKMARK_SVG}</div>`
+    : c.avatar || (other && other.avatar)
     ? `<img id="chatAvatar" class="avatar" src="${esc(c.avatar || other.avatar)}">`
     : `<div id="chatAvatar" class="avatar" style="background:${tgColor(c.title)}">${esc(initials(c.title))}</div>`;
   renderChatSub();
@@ -2095,7 +2103,8 @@ function renderChatSub() {
     return;
   }
   sub.classList.remove('live');
-  if (c.type === 'group') sub.textContent = `${c.members.length} участников`;
+  if (c.type === 'saved') sub.textContent = 'Сохранённые сообщения';
+  else if (c.type === 'group') sub.textContent = `${c.members.length} участников`;
   else if (c.type === 'channel') sub.textContent = `${c.members.length} подписчиков`;
   else {
     const other = c.members.find(u => u.id !== state.me.id);
