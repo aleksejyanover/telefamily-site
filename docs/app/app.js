@@ -3,9 +3,9 @@
 
 const $ = id => document.getElementById(id);
 
-const PLAN_LABEL = { free: 'Бесплатный', start: 'Старт', plus: 'Плюс', family: 'Семья', pro: 'Про' };
+const PLAN_LABEL = { free: 'Бесплатный', start: 'Старт', plus: 'Плюс', family: 'Семья', pro: 'Про', yanovers: 'Яноверы' };
 const PLAN_SIZE  = { free: 100, start: 1024, plus: 2048, family: 2048, pro: 5120 };
-const PLAN_PRICE = { free: 0, start: 99, plus: 199, family: 349, pro: 699 };
+const PLAN_PRICE = { free: 0, start: 99, plus: 199, family: 349, pro: 699, yanovers: 0 };
 
 function luhnValid(num) {
   let sum = 0, alt = false;
@@ -651,7 +651,14 @@ function previewText(c) {
    За просмотр полноэкранного ролика — час без рекламы (как в настоящих приложениях). */
 const AD_FREE_MS = 36e5;   /* награда за просмотр интерстишла:1 час */
 function adFreeUntil() { return +(localStorage.getItem('tf_ad_free') || 0); }
-function showAds() { return !!(state.me && !state.me.premium && Date.now() > adFreeUntil()); }
+/* реклама: на «Бесплатном», «Старте», «Плюсе» и «Семье» — как раньше на бесплатном;
+   у владельца, на «Про» и «Яноверах» её нет. Час без рекламы — после просмотренного ролика */
+function showAds() {
+  if (!state.me || state.me.owner) return false;
+  const pl = state.me.plan || 'free';
+  if (pl === 'pro' || pl === 'yanovers') return false;
+  return Date.now() > adFreeUntil();
+}
 
 /* пул рекламы: карточка на КАЖДЫЙ тариф + игры/приложения из магазинов.
    Тап по приложению — настоящая ссылка: iOS → App Store, остальное → Google Play. */
@@ -721,7 +728,7 @@ function showVideoAd(opts) {
   const root = document.createElement('div');
   root.className = 'ad-video-root';
   root.innerHTML = `
-    <video class="ad-video" playsinline webkit-playsinline preload="auto" src="${fixU('/uploads/ad-family.mp4?v=2')}"></video>
+    <video class="ad-video" playsinline webkit-playsinline preload="metadata" src="${fixU('/uploads/ad-family.mp4?v=2')}"></video>
     <div class="ad-fallback" hidden><div class="ad-fb-emoji">📺</div><div class="ad-fb-title">Реклама</div><div class="ad-fb-sub">Смотрите — это быстро!</div></div>
     <div class="ad-top">
       <span class="ad-label">📡 Реклама</span>
@@ -1247,7 +1254,8 @@ function connectWS() {
 }
 function scheduleReconnect() {
   if (!state.token) return;
-  state.reconnectT = Math.min(15000, (state.reconnectT || 800) * 1.7);
+  /* быстрое восстановление: первые попытки через0.6-1-1.5 с, дальше плавный рост до8 с */
+  state.reconnectT = Math.min(8000, (state.reconnectT || 600) * 1.5);
   clearTimeout(state.reconnTo);
   state.reconnTo = setTimeout(() => { if (state.token) connectWS(); }, state.reconnectT);
 }
@@ -2819,7 +2827,7 @@ function renderPlans(d) {
     <div class="plan ${p.id === sel ? 'active' : ''}" data-plan="${p.id}">
       ${p.id === cur.plan && cur.active ? '<div class="cur-tag">твой тариф</div>' : ''}
       <div class="plan-name">${esc(p.name)}</div>
-      <div class="price">${p.price ? p.price + ' ₽' : '0 ₽'}</div>
+      <div class="price">${p.id === 'yanovers' ? '∞' : (p.price ? p.price + ' ₽' : '0 ₽')}</div>
       <div class="per">${p.price ? 'в месяц' : 'навсегда'}</div>
       <div class="plan-feats">${p.feats.map(f => `<div><span class="ok">✓</span> ${esc(f)}</div>`).join('')}</div>
       ${(!d.owner && (p.id === 'start' || p.id === 'plus')) ? '<div class="plan-ad">📺 или бесплатно — за просмотр рекламы</div>' : ''}
@@ -2844,10 +2852,16 @@ function renderPlans(d) {
   const upd = () => {
     const price = PLAN_PRICE[sel];
     box.querySelectorAll('.plan').forEach(x => x.classList.toggle('active', x.dataset.plan === sel));
-    $('plBuy').textContent = d.owner ? `Активировать «${PLAN_LABEL[sel]}» — бесплатно`
-      : (cards.length ? `Оплатить ${price} ₽ картой ••${cards[0].last4}` : `Привязать карту и оплатить ${price} ₽`);
-    $('plBuy').disabled = (sel === cur.plan && cur.active && !d.owner);
-    if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
+    if (sel === 'yanovers') {
+      /* тариф владельца: сам он оформляет его себе бесплатно, остальным — не по карману */
+      $('plBuy').textContent = d.owner ? '👑 Оформить «Яноверы» — навсегда, бесплатно' : 'Выдаёт только владелец 👑';
+      $('plBuy').disabled = d.owner ? (sel === cur.plan && cur.active) : true;
+    } else {
+      $('plBuy').textContent = d.owner ? `Активировать «${PLAN_LABEL[sel]}» — бесплатно`
+        : (cards.length ? `Оплатить ${price} ₽ картой ••${cards[0].last4}` : `Привязать карту и оплатить ${price} ₽`);
+      $('plBuy').disabled = (sel === cur.plan && cur.active && !d.owner);
+      if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
+    }
     /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика */
     $('plAd').hidden = d.owner || (sel !== 'start' && sel !== 'plus');
   };
@@ -3567,10 +3581,10 @@ async function openAdminChat(id, title) {
 
 /* 💳 владелец выдаёт тариф человеку бесплатно — без карты и демо-оплаты */
 function grantModal(userId, username) {
-  const opts = [['start', 'Старт', '99'], ['plus', 'Плюс', '199'], ['family', 'Семья', '349'], ['pro', 'Про', '699']]
-    .map(([id, name, price]) => `<button class="btn ghost" data-gr="${id}" style="width:100%;justify-content:space-between">${name} — ${price} ₽ <b>бесплатно</b></button>`).join('');
+  const opts = [['start', 'Старт', '99'], ['plus', 'Плюс', '199'], ['family', 'Семья', '349'], ['pro', 'Про', '699'], ['yanovers', 'Яноверы', null]]
+    .map(([id, name, price]) => `<button class="btn ghost" data-gr="${id}" style="width:100%;justify-content:space-between">${name} — ${price === null ? 'навсегда ∞' : price + ' ₽'} <b>бесплатно</b></button>`).join('');
   const box = openModal(`<h3>💳 Выдать тариф — @${esc(username)}</h3>
-    <p class="sub">Включится сразу и на месяц: без карты, без списаний. «Семья» — лучший выбор для семьи.</p>
+    <p class="sub">Включится сразу: без карты, без списаний. «Семья» — лучший выбор для семьи, «Яноверы» — навсегда ∞.</p>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${opts}
       <button class="btn danger" data-gr="free" style="width:100%">Вернуть на «Бесплатный»</button>
@@ -3585,6 +3599,8 @@ function grantModal(userId, username) {
         closeModal();
         toast(plan === 'free'
           ? `↩ @${username} снова на «Бесплатном» тарифе`
+          : plan === 'yanovers'
+          ? `👑 @${username} — «Яноверы» выданы: навсегда ∞, всё без ограничений`
           : `👑 @${username} — тариф «${PLAN_LABEL[plan]}» выдан бесплатно на месяц`);
         await loadAdmin();
       } catch (e) { toast(e.message, true); b.disabled = false; }
