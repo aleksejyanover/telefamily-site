@@ -2830,7 +2830,7 @@ function renderPlans(d) {
       <div class="price">${p.id === 'yanovers' ? '∞' : (p.price ? p.price + ' ₽' : '0 ₽')}</div>
       <div class="per">${p.price ? 'в месяц' : 'навсегда'}</div>
       <div class="plan-feats">${p.feats.map(f => `<div><span class="ok">✓</span> ${esc(f)}</div>`).join('')}</div>
-      ${(!d.owner && (p.id === 'start' || p.id === 'plus')) ? '<div class="plan-ad">📺 или бесплатно — за просмотр рекламы</div>' : ''}
+      ${(p.id === 'start' || p.id === 'plus') ? '<div class="plan-ad">📺 или бесплатно — за просмотр рекламы</div>' : ''}
     </div>`).join('');
 
   const cardsLine = cards.length
@@ -2862,8 +2862,8 @@ function renderPlans(d) {
       $('plBuy').disabled = (sel === cur.plan && cur.active && !d.owner);
       if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
     }
-    /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика */
-    $('plAd').hidden = d.owner || (sel !== 'start' && sel !== 'plus');
+    /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика (доступно и владельцу — для проверки) */
+    $('plAd').hidden = (sel !== 'start' && sel !== 'plus');
   };
 
   box.querySelectorAll('.plan').forEach(p => p.onclick = () => { sel = p.dataset.plan; upd(); });
