@@ -2688,12 +2688,19 @@ $('menuDrawer').addEventListener('click', e => {
     localStorage.setItem('tg_theme', next); document.body.dataset.theme = next;
     toast(next === 'dark' ? 'Тёмная тема' : 'Светлая тема');
   }
+  if (act === 'about') aboutModal();
   if (act === 'help') helpModal();
   if (act === 'server') serverModal();
   if (act === 'clips') openClips();
   if (act === 'admin') openAdmin();
   if (act === 'logout') logout();
 });
+function aboutModal() {
+  openModal(`<h3>О TeleFamily</h3>
+    <p class="sub">30 секунд о мессенжере, его авторе и возможностях.</p>
+    <video controls playsinline preload="metadata" poster="media/promo30-poster.jpg" style="width:100%;border-radius:12px;background:#000"><source src="media/promo30.mp4" type="video/mp4"></video>
+    <p class="sub" style="margin-top:10px">Автор и разработчик — Алексей Яновер. Свой сервер: чаты, звонки, кружки, файлы до 5 ГБ. Android, Mac, Windows и веб.</p>`);
+}
 function serverModal() {
   const box = openModal(`<h3>🌐 Адрес сервера</h3>
     <p class="sub">Приложение TeleFamily общается через сервер. Если адрес изменился — вставь новый (например https://xxx.trycloudflare.com).</p>
