@@ -2168,9 +2168,11 @@ function msgHTML(m, gap, last) {
         <button data-act="reply" title="Ответить">↩</button>
         <button data-act="react" title="Реакция">😀</button>
         ${!m.deleted ? `<button data-act="comments" title="Комментарии">💬${m.commentsCount ? ' ' + m.commentsCount : ''}</button>` : ''}
+        ${!m.deleted && state.chatById[state.current] && state.chatById[state.current].type !== 'saved' ? '<button data-act="fav" title="В избранное">🔖</button>' : ''}
         ${mine && !m.deleted && (m.type === 'text') ? '<button data-act="edit" title="Изменить">✏️</button>' : ''}
         ${(mine || chatMod(state.chatById[state.current])) && !m.deleted ? '<button data-act="del" title="Удалить">🗑</button>' : ''}
       </div>
+      ${m.src ? `<div class="msg-src">↗ ${esc([m.src.name, m.src.chat].filter(Boolean).join(' — '))}</div>` : ''}
       ${showAuthor ? `<div class="msg-author" style="color:${tgColor(m.userId)}" data-profile="${esc(m.userId)}">${esc(m.authorName)} ${m.authorPremium ? '<span class="plus-star">★</span>' : ''}</div>` : ''}
       ${inner}
       ${reactions ? `<div class="reactions">${reactions}</div>` : ''}
@@ -2500,6 +2502,12 @@ async function msgAction(act, id) {
     };
   }
   if (act === 'comments') openComments(id);
+  if (act === 'fav') {
+    try {
+      await api('POST', '/api/fav', { msgId: id });
+      toast('🔖 Сохранено в избранное');
+    } catch (e) { toast(e.message, true); }
+  }
   if (act === 'del') {
     const someoneElses = m.userId !== (state.me && state.me.id);
     const box = openModal(`<h3>Удалить сообщение?</h3><p class="sub">${someoneElses ? 'Это чужое сообщение — как владелец, ты удалишь его у всех участников чата.' : 'Оно исчезнет у всех участников чата.'}</p>

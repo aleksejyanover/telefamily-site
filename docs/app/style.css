@@ -832,3 +832,8 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
   .promo-shots img { width: 156px; height: 277px; }
 }
 
+/* ---------- 💾 Избранное (как Saved Messages в Telegram) ---------- */
+.bookmark-ava { display: grid; place-items: center; background: linear-gradient(135deg, #3390ec, #1b6fd0); flex: none; }
+.bookmark-ava svg { display: block; }
+.msg-src { font-size: 12px; opacity: .75; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px dashed rgba(125, 133, 144, .45); }
+
