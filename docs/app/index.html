@@ -210,6 +210,17 @@
 <!-- ================= ПРОСМОТР ИСТОРИЙ ================= -->
 <div id="storyViewer" class="story-viewer" hidden></div>
 
+<!-- ========= обязательный ролик при первом визите ========= -->
+<div id="introGate" class="intro-gate" hidden>
+  <video id="introVideo" playsinline preload="auto" poster="media/promo30-poster.jpg">
+    <source src="media/promo30.mp4" type="video/mp4">
+  </video>
+  <div class="intro-foot">
+    <button id="introUnmute" class="intro-btn ghost" hidden>🔇 Включить звук</button>
+    <button id="introNext" class="intro-btn primary" hidden>Продолжить</button>
+  </div>
+</div>
+
 <!-- ================= МОДАЛКИ ================= -->
 <div id="modalRoot" class="modal-root" hidden>
   <div class="modal" id="modalBox"></div>

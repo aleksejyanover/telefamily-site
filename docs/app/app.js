@@ -2703,6 +2703,25 @@ function aboutModal() {
     <video controls playsinline preload="metadata" poster="media/promo30-poster.jpg" style="width:100%;border-radius:12px;background:#000"><source src="media/promo30.mp4" type="video/mp4"></video>
     <p class="sub" style="margin-top:10px">Автор и разработчик — Алексей Яновер. Свой сервер: чаты, звонки, кружки, файлы до 5 ГБ. Android, Mac, Windows и веб.</p>`);
 }
+/* --------------------------- обязательный ролик при первом визите:
+ * не посмотрел до конца — кнопки «Продолжить» нет. В номере версии
+ * (tf_intro) лежит версия ролика: сменишь цифру — все увидят новый заново. */
+(function introGate() {
+  const gate = $('introGate'), v = $('introVideo');
+  if (!gate || !v || localStorage.getItem('tf_intro') === '2') return;
+  const finish = () => { localStorage.setItem('tf_intro', '2'); gate.hidden = true; try { v.pause(); } catch (e) {} };
+  gate.hidden = false;
+  const play = () => v.play().then(() => { if (v.muted) $('introUnmute').hidden = false; })
+    .catch(() => {   /* браузеры запрещают звук без нажатия — играем тихо и даём включить */
+      v.muted = true;
+      v.play().then(() => { $('introUnmute').hidden = false; }).catch(() => { $('introNext').hidden = false; });
+    });
+  v.addEventListener('ended', () => { $('introNext').hidden = false; });
+  v.addEventListener('error', () => { $('introNext').hidden = false; });   /* нет видео — не держим человека */
+  $('introUnmute').onclick = () => { v.muted = false; $('introUnmute').hidden = true; v.play().catch(() => {}); };
+  $('introNext').onclick = finish;
+  play();
+})();
 function serverModal() {
   const box = openModal(`<h3>🌐 Адрес сервера</h3>
     <p class="sub">Приложение TeleFamily общается через сервер. Если адрес изменился — вставь новый (например https://xxx.trycloudflare.com).</p>
