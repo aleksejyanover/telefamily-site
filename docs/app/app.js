@@ -2580,6 +2580,8 @@ function cancelReply() { state.replyTo = null; $('replyBar').hidden = true; }
 $('btnCancelReply').onclick = cancelReply;
 
 /* -------------------------------------------------------------- голос и кружок */
+const MAX_VOICE_SEC = 900;   /* голосовое: до 15 минут */
+const MAX_CLIP_SEC = 180;    /* кружок (видеосообщение): до 3 минут */
 async function startVoice() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2613,7 +2615,7 @@ function tickRec() {
   state.recTimer = setInterval(() => {
     const s = Math.floor((Date.now() - (state.recording ? state.recording.start : Date.now())) / 1000);
     $('recTime').textContent = fmtDur(s);
-    if (s >= 60 && state.recording && state.recording.kind === 'voice') finishVoice(true);
+    if (s >= MAX_VOICE_SEC && state.recording && state.recording.kind === 'voice') finishVoice(true);
   }, 250);
 }
 function finishVoice(cancel) {
@@ -2654,7 +2656,7 @@ $('btnCam').onclick = async () => {
     const t = setInterval(() => {
       const s = Math.round((Date.now() - videoStart) / 1000);
       $('videoRecTime').textContent = '⭕ ' + fmtDur(s);
-      if (s >= 60) { clearInterval(t); try { videoRec.stop(); } catch (e) {} }
+      if (s >= MAX_CLIP_SEC) { clearInterval(t); try { videoRec.stop(); } catch (e) {} }
       if ($('videoRec').hidden) clearInterval(t);
     }, 300);
     window._videoTimer = t;
@@ -3079,8 +3081,8 @@ function helpModal() {
     <div class="plus-list" style="font-size:14px">
       <div>💬 <b>Общение</b> — пиши сообщения, жми Enter для отправки</div>
       <div>🖼 <b>Картинки и видео</b> — кнопка 📎 слева в поле ввода</div>
-      <div>🎤 <b>Голосовое</b> — кнопка микрофона, отменить можно «Отмена»</div>
-      <div>⭕ <b>Видеосообщение-кружок</b> — кнопка с кружком, до 60 секунд</div>
+      <div>🎤 <b>Голосовое</b> — кнопка микрофона, до 15 минут; отменить можно «Отмена»</div>
+      <div>⭕ <b>Видеосообщение-кружок</b> — кнопка с кружком, до 3 минут</div>
       <div>↩️ <b>Ответ</b> — наведи на сообщение и нажми стрелку</div>
       <div>😀 <b>Реакции</b> — наведи на сообщение и нажми смайлик</div>
       <div>💬 <b>Комментарии</b> — кнопка 💬 у сообщения (счётчик виден под текстом)</div>
