@@ -36,6 +36,8 @@ const state = {
   hasMore: false,      // в открытой истории есть более старые сообщения
   loadOlder: false,    // идёт догрузка старой страницы (защита от спама)
   keepFromBottom: null,// временный маркер: держим позицию чтения при догрузке
+  searching: false,    // в чате открыт поиск
+  searchResults: [],   // результаты поиска по чату (когда searching=true)
 };
 /* чаты, открытые паролем в этой сессии (снова спросит после перезагрузки) */
 const unlockedChats = new Set();
@@ -2162,6 +2164,7 @@ async function openChat(id) {
   if (state.me && state.me.owner && chat.lock && !unlockedChats.has(id)) { chatLockPrompt(chat); return; }
   state.current = id;
   state.replyTo = null; $('replyBar').hidden = true;
+  resetChatSearchUI();   /* поиск — всегда на конкретный чат: при переключении сбрасываем */
   $('emptyState').hidden = true; $('chatView').hidden = false;
   $('app').classList.add('chat-open');
   renderChatHeader();
@@ -2237,6 +2240,7 @@ function renderTypingBar() {
 }
 
 function renderMessages() {
+  if (state.searching) return;   /* идёт поиск — ленту не трогаем (рисует renderSearchResults) */
   const box = $('messages');
   if (!state.msgs.length) {
     box.innerHTML = `<div style="margin:auto;text-align:center;color:var(--muted);max-width:320px">
@@ -2362,6 +2366,54 @@ $('messages').addEventListener('scroll', () => {
   loadMessages(state.current, 60, first.id).catch(() => {}).finally(() => { state.loadOlder = false; });
 });
 $('scrollBottomBtn').addEventListener('click', () => scrollBottom(true));
+
+/* 🔍 поиск в чате: кнопка 🔍 в шапке → строка поиска → совпадения (как «Поиск в чате» в Telegram) */
+function resetChatSearchUI() {
+  state.searching = false; state.searchResults = [];
+  const bar = $('chatSearchBar'); if (bar) bar.hidden = true;
+  const inp = $('chatSearchInput'); if (inp) inp.value = '';
+  const cnt = $('chatSearchCount'); if (cnt) cnt.textContent = '';
+}
+function openChatSearch() {
+  state.searching = true;
+  $('chatSearchBar').hidden = false;
+  try { $('chatSearchInput').focus(); } catch (e) {}
+}
+function closeChatSearch() {
+  resetChatSearchUI();
+  renderMessages();   /* вернуть обычную ленту */
+}
+function renderSearchResults() {
+  const box = $('messages');
+  if (!state.searchResults.length) {
+    box.innerHTML = '<div style="margin:auto;text-align:center;color:var(--muted);max-width:320px"><div style="font-size:42px">🔍</div><p>Ничего не найдено</p></div>';
+    return;
+  }
+  let html = '';
+  for (const m of state.searchResults) html += msgHTML(m, true, true, false);
+  box.innerHTML = html;
+}
+let _csT = 0, _csSeq = 0;
+async function runChatSearch(q) {
+  const chatId = state.current;
+  if (!chatId || !state.searching) return;
+  if (!q) { state.searchResults = []; $('chatSearchCount').textContent = ''; renderSearchResults(); return; }
+  const seq = ++_csSeq;
+  try {
+    const d = await api('GET', `/api/chats/${chatId}/messages?q=${encodeURIComponent(q)}&limit=60`);
+    if (seq !== _csSeq || state.current !== chatId || !state.searching) return;   /* ⏩ устарело */
+    state.searchResults = d.messages || [];
+    $('chatSearchCount').textContent = state.searchResults.length ? String(state.searchResults.length) : '';
+    renderSearchResults();
+  } catch (e) { /* поиск не критичен — молчим */ }
+}
+$('btnChatSearch').onclick = openChatSearch;
+$('chatSearchClose').onclick = closeChatSearch;
+$('chatSearchInput').addEventListener('input', () => {
+  clearTimeout(_csT);
+  _csT = setTimeout(() => runChatSearch($('chatSearchInput').value.trim()), 280);
+});
+$('chatSearchInput').addEventListener('keydown', e => { if (e.key === 'Escape') closeChatSearch(); });
 
 /* -------------------------------------------------------------- отправка */
 /* ------------------------------------------- 📨 надёжная отправка (очередь offline) */
@@ -2568,6 +2620,27 @@ $('btnEmoji').addEventListener('click', () => {
 
 /* -------------------------------------------------------------- действия с сообщениями */
 $('messages').addEventListener('click', async e => {
+  /* 🔍 режим поиска: клик по результату — закрыть поиск и прыгнуть к сообщению в ленте */
+  if (state.searching) {
+    const el = e.target.closest('.msg');
+    const gid = el && el.dataset.id;
+    if (gid && !e.target.closest('[data-goto]') && !e.target.closest('button') && !e.target.closest('a')) {
+      closeChatSearch();
+      if (/^-?\d+$/.test(String(gid))) {
+        const jumpChat = state.current;
+        api('GET', `/api/chats/${jumpChat}/messages?before=${+gid + 1}&limit=60`).then(d => {
+          if (!d.messages || !d.messages.length || state.current !== jumpChat || state.searching) return;
+          const ids = new Set(d.messages.map(x => x.id));
+          state.msgs = d.messages.concat(state.msgs.filter(x => !ids.has(x.id)));
+          state.hasMore = true;
+          renderMessages();
+          const t = document.querySelector(`.msg[data-id="${gid}"]`);
+          if (t) { t.scrollIntoView({ block: 'center' }); t.style.outline = '2px solid var(--accent2)'; setTimeout(() => t.style.outline = '', 1500); }
+        }).catch(() => {});
+      }
+      return;
+    }
+  }
   const msgEl = e.target.closest('.msg');
   const goto = e.target.closest('[data-goto]');
   if (goto) {
@@ -3316,7 +3389,7 @@ function helpModal() {
   $('hOk').onclick = closeModal;
 }
 $('btnNewChat').onclick = newChatModal;
-$('btnBack').onclick = () => { state.current = null; $('app').classList.remove('chat-open'); $('chatView').hidden = true; $('emptyState').hidden = false; renderChatList(); };
+$('btnBack').onclick = () => { state.current = null; resetChatSearchUI(); $('app').classList.remove('chat-open'); $('chatView').hidden = true; $('emptyState').hidden = false; renderChatList(); };
 $('btnChatInfo').onclick = () => {
   const c = state.chatById[state.current]; if (!c) return;
   const isCh = c.type === 'channel';
