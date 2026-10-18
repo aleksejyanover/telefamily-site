@@ -172,6 +172,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 }
 .chat-header .back { display: none; }
 .chat-head-text { flex: 1; min-width: 0; cursor: pointer; }
+.chat-actions { display: flex; align-items: center; gap: 2px; flex: none; }
 .chat-title { font-weight: 700; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-sub { font-size: 13px; color: var(--muted); }
 .chat-sub.live { color: var(--ok); }
@@ -191,8 +192,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .msg.gap { margin-top: 14px; }
 .bubble {
   background: var(--bubble-in); border-radius: var(--radius); padding: 8px 11px 6px;
-  min-width: 90px; box-shadow: 0 1px 2px rgba(0,0,0,.2); position: relative; overflow: hidden;
+  min-width: 90px; box-shadow: 0 1px 2px rgba(0,0,0,.2); position: relative; overflow: visible;
 }
+.bubble > * { max-width: 100%; }
 .msg.out .bubble { background: var(--bubble-out); color: var(--bubble-out-text); }
 .msg.in .bubble { border-bottom-left-radius: 4px; }
 .msg.out .bubble { border-bottom-right-radius: 4px; }
@@ -265,6 +267,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
   display: flex; align-items: flex-end; gap: 6px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: var(--side); border-top: 1px solid var(--line);
 }
+/* рекламная полоса над вводом (для всех тарифов) — внутрь кладётся .ad-card */
+.ad-bar {
+  padding: 6px 10px 2px; background: var(--side); border-top: 1px solid var(--line);
+}
+.ad-bar .ad-card { margin: 0; }
 .input-wrap { flex: 1; min-width: 0; position: relative; background: var(--panel2); border-radius: 15px; display: flex; align-items: flex-end; }
 .input-wrap textarea {
   flex: 1; width: 100%; min-width: 0; background: none; border: 0; outline: none; resize: none; padding: 12px 44px 12px 14px;

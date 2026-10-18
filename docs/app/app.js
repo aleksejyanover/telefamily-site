@@ -4,7 +4,7 @@
 const $ = id => document.getElementById(id);
 
 const PLAN_LABEL = { free: 'Бесплатный', start: 'Старт', plus: 'Плюс', family: 'Семья', pro: 'Про', yanovers: 'Яноверы' };
-const PLAN_SIZE  = { free: 100, start: 1024, plus: 2048, family: 2048, pro: 5120 };
+const PLAN_SIZE  = { free: 100, start: 1024, plus: 2048, family: 2048, pro: 5120, yanovers: 5120 };
 const PLAN_PRICE = { free: 0, start: 99, plus: 199, family: 349, pro: 699, yanovers: 0 };
 
 function luhnValid(num) {
@@ -90,7 +90,15 @@ function openModal(html) {
   $('modalRoot').hidden = false;
   return $('modalBox');
 }
-function closeModal() { $('modalRoot').hidden = true; $('modalBox').innerHTML = ''; }
+function closeModal() {
+  /* 📞 если закрывают модалку входящего звонка — это отклонение (иначе рингтон висит, а звонок «занят» 45с) */
+  try {
+    if (state.call && state.call.state === 'ringing' && typeof rejectCall === 'function') {
+      rejectCall('dismissed');
+    }
+  } catch (e) {}
+  $('modalRoot').hidden = true; $('modalBox').innerHTML = '';
+}
 $('modalRoot').addEventListener('click', e => { if (e.target === $('modalRoot')) closeModal(); });
 
 function beep() {
@@ -408,7 +416,7 @@ async function api(method, path, body) {
       tfGoOffline();
       throw new Error('🔄 Секунду… ловлю связь');
     }
-    if (r.status === 401 && path !== '/api/login' && path !== '/api/register' && path !== '/api/github') { if (state.me) forgetAccount(state.me.username); logout(true); throw new Error('session'); }
+    if (r.status === 401 && path !== '/api/login' && path !== '/api/register' && path !== '/api/github') { if (state.me) forgetAccount(state.me.username); logout(true); const se = new Error('Сессия закончилась — войди заново'); se.code = 'session'; throw se; }
     const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
     if (ct.indexOf('text/html') >= 0 && attempt < 8) {
       await sleep(2000); /* вместо ответа сервера пришла страница-предупреждение туннеля — ждём и повторяем */
@@ -508,8 +516,27 @@ function logout(silent) {
   try { localStorage.removeItem('tf_last'); } catch (e) {}
   state.token = null; state.me = null;
   if (state.ws) try { state.ws.close(); } catch (e) {}
+  state.ws = null;
+  /* 🧹 полный сброс состояния — иначе после входа под другим аккаунтом видны чаты и лента предыдущего */
+  resetAppState();
   $('app').hidden = true; $('auth').hidden = false;
   if (!silent) toast('Ты вышел из аккаунта');
+}
+/* полная уборка клиентского состояния (выход / смена аккаунта) */
+function resetAppState() {
+  state.chats = []; state.msgs = []; state.current = null; state.chatById = {};
+  state.typing = {}; state.users = {}; state.replyTo = null; state.call = null;
+  unlockedChats.clear();
+  try { commentsOpenId = null; } catch (e) {}
+  /* вернуть стартовый экран вместо оставшегося открытого чата */
+  try {
+    const cv = $('chatView'), es = $('emptyState'), app = $('app');
+    if (cv) cv.hidden = true;
+    if (es) es.hidden = false;
+    if (app) app.classList.remove('chat-open');
+    const msgs = $('messages'); if (msgs) msgs.innerHTML = '';
+    const inp = $('input'); if (inp) inp.value = '';
+  } catch (e) {}
 }
 /* ---- аккаунты, запоминаемые на ЭТОМ телефоне (токены, без паролей) ---- */
 function getAccounts() { try { return JSON.parse(localStorage.getItem('tf_accounts') || '[]'); } catch (e) { return []; } }
@@ -652,6 +679,7 @@ function previewText(c) {
   const body = {
     text: l.text, image: '📷 Фото', video: '📹 Видео', voice: '🎤 Голосовое ' + fmtDur(l.duration),
     videonote: '⭕ Кружок', file: '📄 ' + (l.fileName || 'Файл'), call: '📞 ' + (l.text || 'Звонок'),
+    fun: '🎉 ' + funLabel(l.text),
   }[l.type] || l.text;
   return who + body;
 }
@@ -1057,6 +1085,7 @@ function storyCreateModal() {
       loadStories();
       toast('📱 История опубликована');
     } catch (e) { toast(e.message, true); }
+    finally { $('stGo').disabled = false; }
   };
 }
 
@@ -1168,8 +1197,8 @@ async function userModal(userId) {
       ${dm && !u.bot ? `<button class="btn ghost" id="upVideo" style="flex:1">🎥 Видео</button>` : ''}
     </div>`);
   $('upMsg').onclick = () => { closeModal(); if (dm) openChat(dm.id); else openDm(u.username); };
-  if (dm) $('upCall').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(false)).catch(() => {}); };
-  if (dm) $('upVideo').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(true)).catch(() => {}); };
+  if (dm && !u.bot) $('upCall').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(false)).catch(() => {}); };
+  if (dm && !u.bot) $('upVideo').onclick = () => { closeModal(); openChat(dm.id).then(() => startCall(true)).catch(() => {}); };
 }
 /* 👥 участники группы: тап по участнику → его профиль */
 function groupInfoModal() {
@@ -1245,15 +1274,31 @@ function connectWS() {
   try { ws = new WebSocket(`${wsBase()}?token=${encodeURIComponent(state.token)}`); }
   catch (e) { return scheduleReconnect(); }
   state.ws = ws;
-  ws.onopen = () => { state.reconnectT = 0; };
+  state.lastPong = Date.now();
+  ws.onopen = () => {
+    state.reconnectT = 0;
+    state.lastPong = Date.now();
+    /* после обрыва — догрузить пропущенное: список чатов и текущий чат заново */
+    loadChats().catch(() => {});
+    if (state.current) { loadMessages(state.current, 60).catch(() => {}); }
+    state.typing = {};
+    renderTypingBar();
+  };
   ws.onmessage = ev => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.t === 'pong') { state.lastPong = Date.now(); return; }   /* живой сокет */
     m = fixU(m);
     handleEvent(m);
   };
   ws.onclose = () => { if (state.call) endCall('Связь потеряна', { send: false }); scheduleReconnect(); };
   ws.onerror = () => { try { ws.close(); } catch (e) {} };
 }
+/* зомби-сокет: если сервер молчит дольше 70с — рвём, onclose запустит реконнект */
+setInterval(() => {
+  if (state.ws && state.ws.readyState === 1 && state.lastPong && Date.now() - state.lastPong > 70000) {
+    try { state.ws.close(); } catch (e) {}
+  }
+}, 15000);
 function scheduleReconnect() {
   if (!state.token) return;
   /* быстрое восстановление: первые попытки через0.6-1-1.5 с, дальше плавный рост до8 с */
@@ -1942,10 +1987,11 @@ function handleEvent(m) {
     refreshChatFromMsg(m.chatId, m.msg);
     if (!isMine && m.chatId !== state.current) {
       const title = chat ? chat.title : 'TeleFamily';
-      const body = m.msg.type === 'text' ? m.msg.text : ({ image: '📷 Фото', video: '📹 Видео', voice: '🎤 Голосовое', videonote: '⭕ Кружок', file: '📄 Файл', call: '📞 ' + (m.msg.text || 'Звонок') }[m.msg.type] || '');
+      const body = m.msg.type === 'text' ? m.msg.text : ({ image: '📷 Фото', video: '📹 Видео', voice: '🎤 Голосовое', videonote: '⭕ Кружок', file: '📄 Файл', call: '📞 ' + (m.msg.text || 'Звонок'), fun: '🎉 ' + funLabel(m.msg.text) }[m.msg.type] || '');
       notify(`${m.msg.authorName}${chat && chat.type === 'group' ? ' @ ' + title : ''}`, body.slice(0, 120));
     }
-    if (!isMine) beep();
+    /* notify() выше уже beep'ит для чужих чатов — здесь звук только для открытого чата (иначе двойной) */
+    if (!isMine && m.chatId === state.current) beep();
     renderChatList();
     return;
   }
@@ -2031,6 +2077,14 @@ function refreshChatFromMsg(chatId, msg) {
 }
 
 /* -------------------------------------------------------------- чат */
+/* загрузка страницы сообщений; работает и как «догрузить старые» (before) */
+async function loadMessages(id, limit, before) {
+  const d = await api('GET', `/api/chats/${id}/messages?limit=${limit || 60}` + (before ? `&before=${before}` : ''));
+  if (state.current !== id) return d;   /* 🏁 чат уже сменили — чужое не рисуем */
+  state.msgs = d.messages;
+  renderMessages();
+  return d;
+}
 async function openChat(id) {
   const chat = state.chatById[id];
   if (!chat) return;
@@ -2044,11 +2098,11 @@ async function openChat(id) {
   renderChatList();
   $('messages').innerHTML = '<div style="margin:auto;color:var(--muted)">Загрузка…</div>';
   try {
-    const d = await api('GET', `/api/chats/${id}/messages?limit=60`);
-    state.msgs = d.messages;
-    renderMessages();
+    await loadMessages(id, 60);
+    if (state.current !== id) return;
     markRead(id);
-  } catch (e) { toast(e.message, true); }
+  } catch (e) { if (state.current === id) toast(e.message, true); }
+  if (state.current !== id) return;
   try { $('input').value = loadDraft(id); autoGrow(); } catch (e) {}   /* вернуть черновик */
   renderTypingBar();
 }
@@ -2359,7 +2413,12 @@ function autoGrow() {
 $('input').addEventListener('input', () => {
   autoGrow();
   saveDraft();   /* черновик не пропадёт при обрыве или закрытии */
-  wsSend({ t: 'typing', chatId: state.current, on: true });
+  /* «печатает…» — не чаще раза в 2.5с (сервер шлёт рассылку всем участникам) */
+  const t = Date.now();
+  if (!state.typingSent || t - state.typingSent > 2500) {
+    state.typingSent = t;
+    wsSend({ t: 'typing', chatId: state.current, on: true });
+  }
 });
 $('input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer:fine)').matches) { e.preventDefault(); sendText(); }
@@ -2388,8 +2447,13 @@ $('fileAny').onchange = e => { sendFileAs(e.target.files[0], 'file'); e.target.v
 /* -------------------------------------------------------------- эмодзи */
 const EMOJI = '😀 😂 🥰 😍 😎 🤔 😴 😭 😡 👍 👎 🙏 👏 💪 🔥 ✨ 🎉 ❤️ 🧡 💛 💚 💙 💜 ⭐ 🌙 ☀️ 🌈 ⚡ 🍕 🎮 ⚽ 🎵 🤖 👻 💀 🐱 🐶 🦊 🐻 🚀 🛸 💻 📱 ☕ 🍀 🌊 🏔️'.split(' ');
 let emojiPanel = null;
+let _emojiOutside = null;
+function closeEmojiPanel() {
+  if (emojiPanel) { emojiPanel.remove(); emojiPanel = null; }
+  if (_emojiOutside) { document.removeEventListener('click', _emojiOutside); _emojiOutside = null; }
+}
 $('btnEmoji').addEventListener('click', () => {
-  if (emojiPanel) { emojiPanel.remove(); emojiPanel = null; return; }
+  if (emojiPanel) { closeEmojiPanel(); return; }
   emojiPanel = document.createElement('div');
   emojiPanel.className = 'emoji-panel';
   emojiPanel.innerHTML = EMOJI.map(e => `<button type="button">${e}</button>`).join('');
@@ -2399,11 +2463,12 @@ $('btnEmoji').addEventListener('click', () => {
     el.value += b.textContent; el.focus(); autoGrow();
   });
   $('chatView').appendChild(emojiPanel);
-  setTimeout(() => document.addEventListener('click', function h(ev) {
-    if (emojiPanel && !emojiPanel.contains(ev.target) && ev.target !== $('btnEmoji')) {
-      emojiPanel.remove(); emojiPanel = null; document.removeEventListener('click', h);
-    }
-  }), 0);
+  setTimeout(() => {
+    _emojiOutside = ev => {
+      if (emojiPanel && !emojiPanel.contains(ev.target) && ev.target !== $('btnEmoji')) closeEmojiPanel();
+    };
+    document.addEventListener('click', _emojiOutside);
+  }, 0);
 });
 
 /* -------------------------------------------------------------- действия с сообщениями */
@@ -2431,7 +2496,7 @@ $('messages').addEventListener('click', async e => {
 function toggleVoice(box) {
   const audio = box.querySelector('audio');
   const btn = box.querySelector('.play-btn');
-  document.querySelectorAll('.msg-media.voice audio').forEach(a => { if (a !== audio) { a.pause(); a.previousElementSibling.querySelector('.play-btn').textContent = '▶'; } });
+  document.querySelectorAll('.msg-media.voice audio').forEach(a => { if (a !== audio) { a.pause(); const pb = a.closest('.msg-media') && a.closest('.msg-media').querySelector('.play-btn'); if (pb) pb.textContent = '▶'; } });
   if (audio.paused) {
     audio.play().then(() => { btn.textContent = '⏸'; audio.ontimeupdate = () => { box.querySelector('.voice-time').textContent = fmtDur(audio.currentTime); }; })
       .catch(() => toast('Не удалось воспроизвести', true));
@@ -2820,22 +2885,26 @@ function profileModal() {
     } catch (err) { toast(err.message, true); }
   };
   if ($('pfUnsub')) $('pfUnsub').onclick = async () => {
-    await api('POST', '/api/unsubscribe', {});
-    const d = await api('GET', '/api/me'); state.me = d.user; renderMe(); closeModal(); toast('Подписка отключена');
+    try {
+      await api('POST', '/api/unsubscribe', {});
+      const d = await api('GET', '/api/me'); state.me = d.user; renderMe(); closeModal(); toast('Подписка отключена');
+    } catch (e) { toast(e.message, true); }
   };
 }
 function downscale(file, size) {
   return new Promise((res, rej) => {
     const img = new Image();
+    const u = URL.createObjectURL(file);
     img.onload = () => {
       const c = document.createElement('canvas');
       const k = Math.min(1, size / Math.max(img.width, img.height));
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u);
       res(c.toDataURL('image/jpeg', .85));
     };
-    img.onerror = () => rej(new Error('Не удалось прочитать картинку'));
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('Не удалось прочитать картинку')); };
+    img.src = u;
   });
 }
 
