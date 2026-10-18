@@ -33,6 +33,9 @@ const state = {
   stories: [],         // лента историй (все, кому видно)
   myStories: [],       // мои истории
   chatLockSet: false,  // у владельца задан пароль на закрытые чаты
+  hasMore: false,      // в открытой истории есть более старые сообщения
+  loadOlder: false,    // идёт догрузка старой страницы (защита от спама)
+  keepFromBottom: null,// временный маркер: держим позицию чтения при догрузке
 };
 /* чаты, открытые паролем в этой сессии (снова спросит после перезагрузки) */
 const unlockedChats = new Set();
@@ -91,10 +94,12 @@ function openModal(html) {
   return $('modalBox');
 }
 function closeModal() {
-  /* 📞 если закрывают модалку входящего звонка — это отклонение (иначе рингтон висит, а звонок «занят» 45с) */
+  /* 📞 закрыли модалку входящего звонка (Escape/фон) — это отклонение, иначе рингтон висит,
+     а статус «Занято» держится 45с. Для принятых звонков (state != 'ringing') — ничего. */
   try {
-    if (state.call && state.call.state === 'ringing' && typeof rejectCall === 'function') {
-      rejectCall('dismissed');
+    if (state.call && state.call.state === 'ringing') {
+      if (state.call.group && typeof rejectGroupCall === 'function') rejectGroupCall('отклонено');
+      else if (typeof rejectCall === 'function') rejectCall('Звонок отклонён');
     }
   } catch (e) {}
   $('modalRoot').hidden = true; $('modalBox').innerHTML = '';
@@ -150,6 +155,7 @@ async function notifySetup(silent) {
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(d.key) });
     await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
     state.pushEndpoint = sub.endpoint;
+    try { localStorage.setItem('tf_push_endpoint', sub.endpoint); } catch (e) {}   /* переживает перезагрузку — для отписки при выходе */
     if (!silent) toast('🔔 Уведомления включены: сообщения, голосовые и видеозвонки будут приходить, даже когда приложение закрыто');
     return sub;
   } catch (e) {
@@ -509,9 +515,13 @@ $('formGithub').addEventListener('submit', async e => {
 
 function logout(silent) {
   tfPushOff();
-  /* убираем подписку push этого браузера — пуши не «перетекут» на другого, кто зайдёт */
-  if (state.pushEndpoint && state.token) api('POST', '/api/push/unsubscribe', { endpoint: state.pushEndpoint }).catch(() => {});
+  /* убираем подписку push этого браузера — пуши не «перетекут» на другого, кто зайдёт.
+     endpoint храним в localStorage: после перезагрузки state.pushEndpoint пуст,
+     а отписаться надо именно СЕЙЧАС (токен ещё жив) */
+  const ep = state.pushEndpoint || (() => { try { return localStorage.getItem('tf_push_endpoint'); } catch (e) { return null; } })();
+  if (ep && state.token) api('POST', '/api/push/unsubscribe', { endpoint: ep }).catch(() => {});
   state.pushEndpoint = null;
+  try { localStorage.removeItem('tf_push_endpoint'); } catch (e) {}
   localStorage.removeItem('tg_token');
   try { localStorage.removeItem('tf_last'); } catch (e) {}
   state.token = null; state.me = null;
@@ -526,6 +536,7 @@ function logout(silent) {
 function resetAppState() {
   state.chats = []; state.msgs = []; state.current = null; state.chatById = {};
   state.typing = {}; state.users = {}; state.replyTo = null; state.call = null;
+  state.hasMore = false; state.loadOlder = false; state.keepFromBottom = null;
   unlockedChats.clear();
   try { commentsOpenId = null; } catch (e) {}
   /* вернуть стартовый экран вместо оставшегося открытого чата */
@@ -1113,11 +1124,13 @@ const BOOKMARK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none
 function savedAva(extra) { return `<div class="avatar bookmark-ava ${extra || ''}">${BOOKMARK_SVG}</div>`; }
 
 async function renderChatList() {
+  const seq = (state.clSeq = (state.clSeq || 0) + 1);   /* токен: не дать устаревшему рендеру перекрыть свежий */
   sortChats();
   const q = $('search').value.trim().toLowerCase();
   const list = state.chats.filter(c => !q || c.title.toLowerCase().includes(q) || (c.members || []).some(u => u.username.includes(q)));
   const box = $('chatList');
   const people = await peopleHTML(q);
+  if (seq !== state.clSeq) return;   /* ⏩ пока грузились люди — список уже перерисовали заново */
   const chatsHTML = list.length ? list.map(c => {
       const other = c.type === 'dm' ? c.members.find(u => u.id !== state.me.id) : null;
       const av = c.avatar || (other && other.avatar);
@@ -1141,19 +1154,24 @@ async function renderChatList() {
   renderStories();
 }
 
+/* поиск людей с коротким кэшем: WS-события и печать не порождают лавину запросов */
+let _peopleCache = { q: null, at: 0, html: '' };
 async function peopleHTML(qRaw) {
   let q = qRaw;
   if (q.startsWith('@')) q = q.slice(1);
   if (q.length < 2) return '';
+  if (_peopleCache.q === qRaw && Date.now() - _peopleCache.at < 5000) return _peopleCache.html;   /* недавний ответ — переиспользуем */
   let users = [];
   try { users = (await api('GET', '/api/search?q=' + encodeURIComponent(q))).users.filter(u => u.id !== state.me.id); } catch (e) {}
   if (!users.length || $('search').value.trim().toLowerCase() !== qRaw) return '';
-  return `<div style="padding:8px 12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px">Люди</div>` +
+  const html = `<div style="padding:8px 12px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px">Люди</div>` +
     users.slice(0, 8).map(u => `<div class="chat-item" data-user="${esc(u.username)}">
       <div class="avatar-wrap">${avatarEl(u.avatar, u.name)}${u.online ? '<span class="online-dot"></span>' : ''}</div>
       <div class="ci-body"><div class="ci-top"><span class="ci-name">${esc(u.name)} ${u.bot ? '🤖' : ''} ${u.premium ? '⭐' : ''}</span></div>
       <div class="ci-bottom"><span class="ci-preview">@${esc(u.username)}</span></div></div>
     </div>`).join('');
+  _peopleCache = { q: qRaw, at: Date.now(), html };
+  return html;
 }
 
 async function openDm(username) {
@@ -1232,7 +1250,8 @@ function chatHeadTap() {
 $('chatHead').onclick = chatHeadTap;
 $('chatAvatar').onclick = chatHeadTap;
 
-$('search').addEventListener('input', () => renderChatList());
+let _searchT = 0;
+$('search').addEventListener('input', () => { clearTimeout(_searchT); _searchT = setTimeout(() => renderChatList(), 200); });
 $('chatList').addEventListener('click', e => {
   const it = e.target.closest('.chat-item'); if (!it) return;
   if (it.dataset.user) return openDm(it.dataset.user);
@@ -1530,6 +1549,7 @@ function onGroupCallStart(m) {
 }
 async function acceptGroupCall() {
   const c = state.call; if (!c || !c.group || c.role !== 'callee') return;
+  c.state = 'connecting';        /* 🛟 closeModal не должен отклонить принятое */
   closeModal(); ringStop(); clearTimeout(c.ringT);
   try {
     c.local = await navigator.mediaDevices.getUserMedia({ audio: true, video: c.video ? { width: 1280, height: 720, facingMode: 'user' } : false });
@@ -1727,6 +1747,7 @@ function onCallInvite(m) {
 
 async function acceptCall() {
   const c = state.call; if (!c || c.role !== 'callee') return;
+  c.state = 'connecting';        /* 🛟 closeModal (фон/Escape) не должен отклонить то, что уже приняли */
   closeModal(); ringStop(); clearTimeout(c.ringT);
   try {
     c.local = await navigator.mediaDevices.getUserMedia({ audio: true, video: c.video ? { width: 1280, height: 720, facingMode: 'user' } : false });
@@ -2077,12 +2098,24 @@ function refreshChatFromMsg(chatId, msg) {
 }
 
 /* -------------------------------------------------------------- чат */
-/* загрузка страницы сообщений; работает и как «догрузить старые» (before) */
+/* загрузка страницы сообщений; before — догрузить более старые (прокрутка вверх) */
 async function loadMessages(id, limit, before) {
   const d = await api('GET', `/api/chats/${id}/messages?limit=${limit || 60}` + (before ? `&before=${before}` : ''));
   if (state.current !== id) return d;   /* 🏁 чат уже сменили — чужое не рисуем */
-  state.msgs = d.messages;
-  renderMessages();
+  state.hasMore = !!d.hasMore;
+  if (before && state.msgs.length) {
+    /* догрузка старой истории: приклеиваем сверху, сохраняя место чтения */
+    const box = $('messages');
+    const keepBottom = box.scrollHeight - box.scrollTop;
+    const ids = new Set(d.messages.map(x => x.id));
+    state.msgs = d.messages.concat(state.msgs.filter(x => !ids.has(x.id)));
+    state.keepFromBottom = keepBottom;
+    renderMessages();
+    state.keepFromBottom = null;
+  } else {
+    state.msgs = d.messages;
+    renderMessages();
+  }
   return d;
 }
 async function openChat(id) {
@@ -2158,9 +2191,12 @@ function renderTypingBar() {
   const arr = state.typing[state.current] || [];
   const bar = $('typingBar');
   if (!arr.length) { bar.hidden = true; return; }
-  const names = arr.map(id => state.users[id]?.name || 'кто-то');
+  const names = arr.map(id => (state.users[id] || (state.me && state.me.id === id ? state.me : null))?.name || 'кто-то');
+  const phrase = names.length === 1
+    ? `${names[0]} печатает…`
+    : `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]} печатают…`;
   bar.hidden = false;
-  bar.innerHTML = `<span class="typing-dots"><i></i><i></i><i></i></span> ${esc(names.join(', '))} печатает…`;
+  bar.innerHTML = `<span class="typing-dots"><i></i><i></i><i></i></span> ${esc(phrase)}`;
 }
 
 function renderMessages() {
@@ -2178,17 +2214,19 @@ function renderMessages() {
     if (day !== prevDay) { html += `<div class="day-sep">${day}</div>`; prev = null; prevDay = day; }
     const gap = !prev || prev.userId !== m.userId || (m.createdAt - prev.createdAt > 5 * 60000);
     const last = !next || next.userId !== m.userId || (next.createdAt - m.createdAt > 5 * 60000) || fmtDay(next.createdAt) !== day;
-    html += msgHTML(m, gap, last);
+    html += msgHTML(m, gap, last, i === state.msgs.length - 1);
     prev = m;
   }
   box.innerHTML = html;
-  scrollBottom(true);
+  if (state.keepFromBottom != null) box.scrollTop = box.scrollHeight - state.keepFromBottom;   /* догружали старое — держим место чтения */
+  else scrollBottom(true);
 }
-function msgHTML(m, gap, last) {
+function msgHTML(m, gap, last, chatLast) {
   const mine = m.userId === state.me.id;
   const c = state.chatById[m.chatId];
   const showAuthor = c && c.type === 'group' && !mine && gap;
-  const reply = m.replyTo ? state.msgs.find(x => x.id === m.replyTo) : null;
+  let reply = m.replyTo ? state.msgs.find(x => x.id === m.replyTo) : null;
+  if (!reply && m.replyView) reply = m.replyView;   /* цитируемое вне загруженной страницы — снапшот с сервера */
   let inner = '';
   if (m.deleted) inner += `<div class="msg-text">🗑 Сообщение удалено</div>`;
   else {
@@ -2209,6 +2247,7 @@ function msgHTML(m, gap, last) {
     <div class="bubble">
       <div class="msg-tools">
         <button data-act="reply" title="Ответить">↩</button>
+        ${!m.deleted && m.type !== 'call' ? '<button data-act="fwd" title="Переслать">↪️</button>' : ''}
         <button data-act="react" title="Реакция">😀</button>
         ${!m.deleted ? `<button data-act="comments" title="Комментарии">💬${m.commentsCount ? ' ' + m.commentsCount : ''}</button>` : ''}
         ${!m.deleted && state.chatById[state.current] && state.chatById[state.current].type !== 'saved' ? '<button data-act="fav" title="В избранное">🔖</button>' : ''}
@@ -2222,6 +2261,10 @@ function msgHTML(m, gap, last) {
       <div class="msg-meta">${m.edited ? '<span class="edited">изменено</span>' : ''}<span>${fmtTime(m.createdAt)}</span>
       ${m.commentsCount ? `<button class="cm-badge" data-act="comments" title="Открыть комментарии">💬 ${m.commentsCount}</button>` : ''}
       ${mine ? `<span class="ticks">${m.pending ? '⏳' : (m.readBy && m.readBy.length ? '✓✓' : '✓')}</span>` : ''}</div>
+      ${chatLast && mine && !m.pending && m.readBy && m.readBy.length
+        ? (c && c.type === 'dm'
+            ? '<div class="read-caption">Прочитано</div>'
+            : `<div class="read-caption">Увидели ${m.readBy.length}</div>`) : ''}
     </div>
   </div>`;
 }
@@ -2267,6 +2310,21 @@ function scrollBottom(force) {
   const box = $('messages');
   if (force || box.scrollHeight - box.scrollTop - box.clientHeight < 160) box.scrollTop = box.scrollHeight;
 }
+
+/* 📜 история: дотянулись до верха — грузим предыдущую страницу (как в Telegram);
+   далеко от низа — показываем кнопку «к последнему сообщению» */
+$('messages').addEventListener('scroll', () => {
+  const box = $('messages');
+  const far = box.scrollHeight - box.scrollTop - box.clientHeight > 300;
+  const sb = $('scrollBottomBtn'); if (sb) sb.hidden = !far;
+  if (state.loadOlder || !state.hasMore || !state.current || !state.msgs.length) return;
+  if (box.scrollTop > 60) return;                    /* ещё не дотянулись к верхней границе */
+  const first = state.msgs.find(x => typeof x.id === 'number');
+  if (!first) return;                                 /* только локальные (pending) — догружать не по чему */
+  state.loadOlder = true;
+  loadMessages(state.current, 60, first.id).catch(() => {}).finally(() => { state.loadOlder = false; });
+});
+$('scrollBottomBtn').addEventListener('click', () => scrollBottom(true));
 
 /* -------------------------------------------------------------- отправка */
 /* ------------------------------------------- 📨 надёжная отправка (очередь offline) */
@@ -2476,8 +2534,21 @@ $('messages').addEventListener('click', async e => {
   const msgEl = e.target.closest('.msg');
   const goto = e.target.closest('[data-goto]');
   if (goto) {
-    const target = document.querySelector(`.msg[data-id="${goto.dataset.goto}"]`);
-    if (target) { target.scrollIntoView({ block: 'center' }); target.style.outline = '2px solid var(--accent2)'; setTimeout(() => target.style.outline = '', 1200); }
+    const gid = goto.dataset.goto;
+    const target = document.querySelector(`.msg[data-id="${gid}"]`);
+    if (target) { target.scrollIntoView({ block: 'center' }); target.style.outline = '2px solid var(--accent2)'; setTimeout(() => target.style.outline = '', 1200); return; }
+    /* цитируемое не в загруженной истории — достаём страницу вокруг него и прыгаем */
+    if (state.current && /^-?\d+$/.test(String(gid))) {
+      const jumpChat = state.current;
+      api('GET', `/api/chats/${jumpChat}/messages?before=${+gid + 1}&limit=60`).then(d => {
+        if (!d.messages || !d.messages.length || state.current !== jumpChat) return;
+        const ids = new Set(d.messages.map(x => x.id));
+        state.msgs = d.messages.concat(state.msgs.filter(x => !ids.has(x.id)));
+        renderMessages();
+        const t2 = document.querySelector(`.msg[data-id="${gid}"]`);
+        if (t2) { t2.scrollIntoView({ block: 'center' }); t2.style.outline = '2px solid var(--accent2)'; setTimeout(() => t2.style.outline = '', 1200); }
+      }).catch(() => {});
+    }
     return;
   }
   const voice = e.target.closest('[data-voice]');
@@ -2525,8 +2596,38 @@ const REACTIONS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
 async function addReaction(id, emoji) {
   try { const d = await api('POST', `/api/messages/${id}/react`, { emoji }); replaceMsg(d.msg); } catch (e) { toast(e.message, true); }
 }
+/* ➡️ пересылка: выбираем чат(ы) — как в Telegram */
+function forwardModal(id) {
+  const m = state.msgs.find(x => x.id === id); if (!m) return;
+  const rows = state.chats.map(c => {
+    const other = c.type === 'dm' ? c.members.find(u => u.id !== state.me.id) : null;
+    const av = c.avatar || (other && other.avatar);
+    const icon = c.type === 'saved' ? savedAva() : avatarEl(av, c.title);
+    return `<label class="search-result" style="cursor:pointer">
+      <input type="checkbox" value="${esc(c.id)}" style="flex:none">
+      <div class="avatar-wrap">${icon}</div>
+      <div><div class="sr-name">${esc(c.title)}${c.type === 'group' ? ' 👥' : c.type === 'channel' ? ' 📢' : ''}</div></div>
+    </label>`;
+  }).join('');
+  openModal(`<h3>↪️ Переслать сообщение</h3>
+    <p class="sub">Выбери чат(ы), куда отправить копию</p>
+    <div class="list-scroll">${rows || '<div class="cm-empty">Пока некуда пересылать</div>'}</div>
+    <div class="modal-actions"><button class="btn ghost" id="fwdCancel">Отмена</button><button class="btn primary" id="fwdGo">Переслать</button></div>`);
+  $('fwdCancel').onclick = closeModal;
+  $('fwdGo').onclick = async () => {
+    const ids = [...$('modalBox').querySelectorAll('input:checked')].map(x => x.value);
+    if (!ids.length) { toast('Выбери хотя бы один чат', true); return; }
+    try {
+      await api('POST', '/api/forward', { msgId: id, chatIds: ids });
+      closeModal();
+      const n = ids.length;
+      toast(`↪️ Переслано в ${n} ${n === 1 ? 'чат' : n < 5 ? 'чата' : 'чатов'}`);
+    } catch (e) { toast(e.message, true); }
+  };
+}
 async function msgAction(act, id) {
   const m = state.msgs.find(x => x.id === id); if (!m) return;
+  if (act === 'fwd') forwardModal(id);
   if (act === 'reply') {
     state.replyTo = id;
     $('replyName').textContent = m.authorName;
@@ -2830,10 +2931,12 @@ function profileModal() {
   $('pickAvatar').onclick = () => $('avatarFile').click();
   $('pfIdCopy').onclick = () => {
     const id = $('pfId').value;
-    try {
-      navigator.clipboard.writeText(id);
-      toast('📋 ID скопирован: ' + id);
-    } catch (e) { $('pfId').select(); toast('ID выделен — нажми Cmd+C'); }
+    /* writeText — промис: reject НЕ ловится try/catch, обрабатываем явно */
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(id)
+        .then(() => toast('📋 ID скопирован: ' + id))
+        .catch(() => { $('pfId').select(); toast('ID выделен — нажми Cmd+C'); });
+    } else { $('pfId').select(); toast('ID выделен — нажми Cmd+C'); }
   };
   attachPartyTaps();   /* 🎉 пасхалка: 3 тапа по аватару — вечеринка */
   $('avatarFile').onchange = async e => {
@@ -3700,8 +3803,8 @@ function grantModal(userId, username) {
       ${opts}
       <button class="btn danger" data-gr="free" style="width:100%">Вернуть на «Бесплатный»</button>
     </div>
-    <div class="modal-actions"><button class="btn ghost" id="grCancel">Назад</button></div>`);
-  $('grCancel').onclick = closeModal;
+    <div class="modal-actions"><button class="btn ghost" id="grnCancel">Назад</button></div>`);
+  $('grnCancel').onclick = closeModal;
   box.querySelectorAll('[data-gr]').forEach(b => {
     b.onclick = async () => {
       const plan = b.dataset.gr; b.disabled = true;
