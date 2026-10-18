@@ -2878,7 +2878,7 @@ function renderPlans(d) {
 
   const planCards = d.plans.map(p => `
     <div class="plan ${p.id === sel ? 'active' : ''}" data-plan="${p.id}">
-      ${p.id === cur.plan && cur.active ? '<div class="cur-tag">твой тариф</div>' : ''}
+      ${p.id === cur.plan ? '<div class="cur-tag">твой тариф</div>' : ''}
       <div class="plan-name">${esc(p.name)}</div>
       <div class="price">${p.id === 'yanovers' ? '∞' : (p.price ? p.price + ' ₽' : '0 ₽')}</div>
       <div class="per">${p.price ? 'в месяц' : 'навсегда'}</div>
@@ -2910,10 +2910,18 @@ function renderPlans(d) {
       $('plBuy').textContent = d.owner ? '👑 Оформить «Яноверы» — навсегда, бесплатно' : 'Выдаёт только владелец 👑';
       $('plBuy').disabled = d.owner ? (sel === cur.plan && cur.active) : true;
     } else {
-      $('plBuy').textContent = d.owner ? `Активировать «${PLAN_LABEL[sel]}» — бесплатно`
-        : (cards.length ? `Оплатить ${price} ₽ картой ••${cards[0].last4}` : `Привязать карту и оплатить ${price} ₽`);
-      $('plBuy').disabled = (sel === cur.plan && cur.active && !d.owner);
-      if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
+      const curPlan = cur.active ? cur.plan : 'free';
+      if (sel === 'free' && !d.owner) {
+        /* обычным пользователям покупать бесплатный не нужно — он и так у всех включён */
+        $('plBuy').textContent = 'Бесплатный тариф — по умолчанию у всех';
+        $('plBuy').disabled = true;
+      } else {
+        $('plBuy').textContent = d.owner
+          ? (sel === 'free' ? '⬇ Переключиться на «Бесплатный» — бесплатно' : `Активировать «${PLAN_LABEL[sel]}» — бесплатно`)
+          : (cards.length ? `Оплатить ${price} ₽ картой ••${cards[0].last4}` : `Привязать карту и оплатить ${price} ₽`);
+        $('plBuy').disabled = (sel === curPlan);
+        if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
+      }
     }
     /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика (доступно и владельцу — для проверки) */
     $('plAd').hidden = (sel !== 'start' && sel !== 'plus');
