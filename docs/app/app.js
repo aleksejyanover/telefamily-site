@@ -465,6 +465,7 @@ $('authTabs').addEventListener('click', e => {
   $('formLogin').hidden = t.dataset.tab !== 'login';
   $('formRegister').hidden = t.dataset.tab !== 'register';
   $('formGithub').hidden = t.dataset.tab !== 'github';
+  const ghb = $('ghCodeBox'); if (ghb && t.dataset.tab !== 'github') ghb.remove();   /* бокс кода — только на вкладке GitHub */
   $('authError').hidden = true;
 });
 function authFail(msg) { const e = $('authError'); e.textContent = msg; e.hidden = false; }
@@ -509,9 +510,45 @@ $('formGithub').addEventListener('submit', async e => {
   e.preventDefault();
   const f = new FormData(e.target);
   const btn = e.target.querySelector('button[type=submit]');
-  try { await withBusy(btn, async () => { await afterAuth(await api('POST', '/api/github', { github: f.get('github') })); }); }
+  const gh = f.get('github');
+  try { await withBusy(btn, async () => { await githubAuth(gh, f.get('ghcode') || ''); }); }
   catch (err) { authFail(err.message); }
 });
+/* GitHub-вход — две ступени: сервер выдаёт код → вставляешь его в bio → повторяешь вход.
+   Так аккаунт нельзя занять по одному логину (раньше можно было). */
+async function githubAuth(gh, code) {
+  const d = await api('POST', '/api/github', { github: gh, code: code || undefined });
+  if (d && d.need === 'code') {
+    openAuthCodeBox(gh, d.code, d.hint);
+    return;
+  }
+  await afterAuth(d);
+}
+function openAuthCodeBox(gh, code, hint) {
+  const form = $('formGithub');
+  const old = $('ghCodeBox'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'ghCodeBox';
+  div.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:13px;line-height:1.5';
+  div.innerHTML = `
+    <b>Шаг 2 из 2 — подтверди, что это ты</b>
+    <p style="margin:8px 0;color:var(--muted)">${esc(hint || '')}</p>
+    <div style="display:flex;gap:8px;align-items:center">
+      <code id="ghCodeVal" style="flex:1;user-select:all;font-size:15px;letter-spacing:1px;background:var(--panel);padding:8px 10px;border-radius:8px;text-align:center">${esc(code)}</code>
+      <button class="btn ghost" id="ghCopy" style="flex:none;padding:8px 12px">📋 Копия</button>
+    </div>
+    <button class="btn primary" id="ghDone" style="width:100%;margin-top:10px">Я вставил код в bio — продолжить</button>`;
+  form.after(div);   /* бокс — сразу под формой GitHub */
+  $('ghCopy').onclick = () => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => toast('📋 Код скопирован')).catch(() => toast('Выдели код и скопируй вручную', true));
+    } else toast('Выдели код и скопируй вручную', true);
+  };
+  $('ghDone').onclick = async () => {
+    try { await withBusy($('ghDone'), async () => { await githubAuth(gh, code); }); }
+    catch (err) { authFail(err.message); }
+  };
+}
 
 function logout(silent) {
   tfPushOff();
