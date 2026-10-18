@@ -682,7 +682,11 @@ async function startApp() {
       history.replaceState(null, '', u2.pathname + u2.search);
     }
   } catch (e) {}
-  maybeInterstitial();   /* реклама у всех: настоящая видеореклама — раз за сессию */
+  /* реклама у всех и ПОСЛЕ авторизации: сперва интро-ролик (звук обязателен,
+     без кнопки «включить звук») — он же закрывает рекламу этой сессии;
+     если интро уже просмотрено — обычный интерстишл */
+  if (maybeIntro()) sessionStorage.setItem('tf_ad_session', '1');
+  else maybeInterstitial();   /* настоящая видеореклама — раз за сессию */
 }
 
 function renderMe() {
@@ -859,10 +863,20 @@ function showVideoAd(opts) {
   vid.addEventListener('timeupdate', () => {
     if (vid.duration) bar.style.width = Math.min(100, vid.currentTime / vid.duration * 100) + '%';
   });
-  /* звук включаем: ролик открывается по тапу — autoplay со звуком разрешён */
+  /* звук обязателен: НЕ молчим при блоке autoplay — если браузер запретил звук
+     без свежего жеста, включаем звук на первом касании/клавише (без кнопки) */
   vid.muted = false;
   vid.volume = 1;
-  vid.play().catch(() => { vid.muted = true; vid.play().catch(() => toFallback(true)); });
+  vid.play().catch(() => {
+    const unlock = () => {
+      vid.muted = false; vid.volume = 1;
+      vid.play().catch(() => toFallback(true));
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+    document.addEventListener('pointerdown', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+  });
   function close() {
     if (closed) return;
     closed = true;
@@ -2970,23 +2984,33 @@ function aboutModal() {
 }
 /* --------------------------- обязательный ролик при первом визите:
  * не посмотрел до конца — кнопки «Продолжить» нет. В номере версии
- * (tf_intro) лежит версия ролика: сменишь цифру — все увидят новый заново. */
-(function introGate() {
+ * (tf_intro) лежит версия ролика: сменишь цифру — все увидят новый заново.
+ * ⚠ Ролик показываем ПОСЛЕ авторизации (его раньше выкидывало на экран входа),
+ *   звук ОБЯЗАТЕЛЕН — кнопки «включить звук» больше НЕТ: играем со звуком сразу
+ *   (заходим после нажатия «Войти» → есть жест), при блоке autoplay — на первом
+ *   касании экрана без единой кнопки. */
+let introStarted = false;
+function maybeIntro() {
   const gate = $('introGate'), v = $('introVideo');
-  if (!gate || !v || localStorage.getItem('tf_intro') === '2') return;
+  if (!gate || !v || localStorage.getItem('tf_intro') === '2' || introStarted) return false;
+  introStarted = true;
   const finish = () => { localStorage.setItem('tf_intro', '2'); gate.hidden = true; try { v.pause(); } catch (e) {} };
   gate.hidden = false;
-  const play = () => v.play().then(() => { if (v.muted) $('introUnmute').hidden = false; })
-    .catch(() => {   /* браузеры запрещают звук без нажатия — играем тихо и даём включить */
-      v.muted = true;
-      v.play().then(() => { $('introUnmute').hidden = false; }).catch(() => { $('introNext').hidden = false; });
-    });
+  /* звук обязателен: без mute-fallback и без кнопки */
+  const startWithSound = () => { v.muted = false; v.volume = 1; v.play().catch(() => {}); };
+  v.muted = false; v.volume = 1;
+  v.play().catch(() => {
+    /* браузер запретил звук без свежего жеста — ждём ПЕРВОГО касания/клавиши,
+       включаем звук. Никакой кнопки на экране не появляется. */
+    const unlock = () => { startWithSound(); document.removeEventListener('pointerdown', unlock); document.removeEventListener('keydown', unlock); };
+    document.addEventListener('pointerdown', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+  });
   v.addEventListener('ended', () => { $('introNext').hidden = false; });
   v.addEventListener('error', () => { $('introNext').hidden = false; });   /* нет видео — не держим человека */
-  $('introUnmute').onclick = () => { v.muted = false; $('introUnmute').hidden = true; v.play().catch(() => {}); };
   $('introNext').onclick = finish;
-  play();
-})();
+  return true;
+}
 function serverModal() {
   const box = openModal(`<h3>🌐 Адрес сервера</h3>
     <p class="sub">Приложение TeleFamily общается через сервер. Если адрес изменился — вставь новый (например https://xxx.trycloudflare.com).</p>
