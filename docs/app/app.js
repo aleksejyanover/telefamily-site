@@ -605,7 +605,7 @@ async function startApp() {
       history.replaceState(null, '', u2.pathname + u2.search);
     }
   } catch (e) {}
-  maybeInterstitial();   /* бесплатный тариф: настоящая видеореклама — раз за сессию */
+  maybeInterstitial();   /* реклама у всех: настоящая видеореклама — раз за сессию */
 }
 
 function renderMe() {
@@ -660,12 +660,10 @@ function previewText(c) {
    За просмотр полноэкранного ролика — час без рекламы (как в настоящих приложениях). */
 const AD_FREE_MS = 36e5;   /* награда за просмотр интерстишла:1 час */
 function adFreeUntil() { return +(localStorage.getItem('tf_ad_free') || 0); }
-/* реклама: на «Бесплатном», «Старте», «Плюсе» и «Семье» — как раньше на бесплатном;
-   у владельца, на «Про» и «Яноверах» её нет. Час без рекламы — после просмотренного ролика */
+/* реклама включена у ВСЕХ, включая владельца и любые тарифы (решение владельца).
+   Час без рекламы — только после просмотренного ролика */
 function showAds() {
-  if (!state.me || state.me.owner) return false;
-  const pl = state.me.plan || 'free';
-  if (pl === 'pro' || pl === 'yanovers') return false;
+  if (!state.me) return false;
   return Date.now() > adFreeUntil();
 }
 
@@ -751,7 +749,6 @@ function showVideoAd(opts) {
         <div class="ad-cta-txt"><b>TeleFamily</b><span>семейный мессенджер · всё без лимитов</span></div>
         <a class="ad-cta-btn" href="https://aleksejyanover.github.io/telefamily-site/" target="_blank" rel="noopener">Открыть</a>
       </div>
-      ${opts.reward ? `<div class="ad-reward-hint">🎁 за просмотр — тариф «${PLAN_LABEL[opts.reward]}» на сутки</div>` : ''}
     </div>`;
   document.body.appendChild(root);
   const vid = root.querySelector('.ad-video');
@@ -794,25 +791,17 @@ function showVideoAd(opts) {
     clearInterval(tick);
     try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch (e) {}
     root.remove();
-    if (opts.reward) {
-      api('POST', '/api/ad/reward', { plan: opts.reward })
-        .then(r => {
-          refreshMe().then(() => { if (opts.onReward) opts.onReward(r); }).catch(() => {});
-          toast(r.message || `📺 «${PLAN_LABEL[opts.reward]}» активирован до ${new Date(r.expires).toLocaleDateString('ru')} · сегодня ещё ${r.left}`);
-        })
-        .catch(e => toast(e.message, true));
-    } else {
-      localStorage.setItem('tf_ad_free', String(Date.now() + AD_FREE_MS));
-      const u = new Date(Date.now() + AD_FREE_MS);
-      toast(`Спасибо, что посмотрели! Без рекламы до ${u.getHours()}:${String(u.getMinutes()).padStart(2, '0')} 🎉`);
-      renderChatList();
-    }
+    /* просмотренный ролик = час без рекламы (награды тарифами больше нет) */
+    localStorage.setItem('tf_ad_free', String(Date.now() + AD_FREE_MS));
+    const u = new Date(Date.now() + AD_FREE_MS);
+    toast(`Спасибо, что посмотрели! Без рекламы до ${u.getHours()}:${String(u.getMinutes()).padStart(2, '0')} 🎉`);
+    renderChatList();
     if (opts.afterClose) opts.afterClose();
   }
   x.onclick = close;
 }
 
-/* интерстишл для бесплатного тарифа: один раз за сессию, если прошёл час без рекламы */
+/* интерстишл: один раз за сессию, если прошёл час без рекламы */
 function maybeInterstitial() {
   if (!showAds()) return;
   if (sessionStorage.getItem('tf_ad_session')) return;
@@ -2883,7 +2872,6 @@ function renderPlans(d) {
       <div class="price">${p.id === 'yanovers' ? '∞' : (p.price ? p.price + ' ₽' : '0 ₽')}</div>
       <div class="per">${p.price ? 'в месяц' : 'навсегда'}</div>
       <div class="plan-feats">${p.feats.map(f => `<div><span class="ok">✓</span> ${esc(f)}</div>`).join('')}</div>
-      ${(p.id === 'start' || p.id === 'plus') ? '<div class="plan-ad">📺 или бесплатно — за просмотр рекламы</div>' : ''}
     </div>`).join('');
 
   const cardsLine = cards.length
@@ -2898,7 +2886,6 @@ function renderPlans(d) {
     <div class="modal-actions">
       <button class="btn ghost" id="plOwner">🔑 Карта владельца</button>
       <button class="btn ghost" id="plCancel">Закрыть</button>
-      <button class="btn ghost" id="plAd" hidden>📺 Получить за рекламу</button>
       <button class="btn primary" id="plBuy"></button>
     </div>`);
 
@@ -2923,8 +2910,6 @@ function renderPlans(d) {
         if ($('plBuy').disabled) $('plBuy').textContent = `Тариф «${PLAN_LABEL[sel]}» уже подключён`;
       }
     }
-    /* «Старт» и «Плюс» можно получить бесплатно — за просмотр рекламного ролика (доступно и владельцу — для проверки) */
-    $('plAd').hidden = (sel !== 'start' && sel !== 'plus');
   };
 
   box.querySelectorAll('.plan').forEach(p => p.onclick = () => { sel = p.dataset.plan; upd(); });
@@ -2941,10 +2926,6 @@ function renderPlans(d) {
 
   $('plCancel').onclick = closeModal;
   $('plOwner').onclick = ownerModal;
-  $('plAd').onclick = () => showVideoAd({
-    reward: sel,
-    onReward: async () => { try { renderPlans(await api('GET', '/api/plans')); } catch (e) {} },   /* перерисовать модалку с новым тарифом */
-  });
   $('plBuy').onclick = async () => {
     if (d.owner) {
       const b = $('plBuy'); b.disabled = true;
