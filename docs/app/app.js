@@ -230,6 +230,10 @@ async function tfAlive(url) {
 }
 function tfOrigin(u) { try { return new URL(u).origin; } catch (e) { return ''; } }
 /* все кандидаты-адреса: сохранённый, вшитые в приложение, свежие с GitHub */
+/* 💚 вечная дверь: Cloudflare Worker — всегда в сети (бесплатный always-on).
+   Ноутбук может спать, Serveo и lhr.life — мёртвы: клиент всё равно доедет
+   до живого сервера и не покажет ложное «Сервер не отвечает». */
+const T_ETERNAL = 'https://telefamily.telefamily.workers.dev';
 async function tfCandidates() {
   const list = [];
   const push = u => {
@@ -241,6 +245,7 @@ async function tfCandidates() {
   push(localStorage.getItem('tf_server'));
   push(window.__TFSERVER__);
   push(window.__TFSERVER2__);
+  push(T_ETERNAL);   /* гарантированный шанс: раньше воркер сюда не попадал вовсе */
   for (const u of await tfDiscover()) push(u);
   return list;
 }
