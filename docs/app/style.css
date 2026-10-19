@@ -257,11 +257,34 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .msg.in .reaction { background: var(--panel2); border-color: var(--line); }
 
 .msg-tools { position: absolute; top: -14px; display: none; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 2px; box-shadow: var(--shadow); z-index: 4; }
-.msg:hover .msg-tools { display: flex; }
+/* тач-экраны без :hover — там действия даёт долгое нажатие → контекстное меню */
+@media (hover: hover) and (pointer: fine) {
+  .msg:hover .msg-tools { display: flex; }
+}
 .msg.out .msg-tools { left: 0; }
 .msg.in .msg-tools { right: 0; }
 .msg-tools button { width: 30px; height: 28px; border-radius: 8px; font-size: 14px; color: var(--muted); }
 .msg-tools button:hover { background: var(--panel2); color: var(--text); }
+
+/* 🔔 контекстное меню сообщения: правый клик / долгое нажатие — вертикальный попап,
+   везде влезает: max-width под узкий телефон, max-height + скролл под альбомную ориентацию */
+.ctx-menu {
+  position: fixed; z-index: 300;
+  min-width: 180px; max-width: min(260px, calc(100vw - 16px));
+  max-height: min(320px, calc(100vh - 16px)); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ctx-menu[hidden] { display: none; }
+.ctx-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: 0; background: transparent; border-radius: 8px;
+  font-size: 14.5px; color: var(--text); text-align: left; white-space: nowrap;
+}
+.ctx-menu button:hover, .ctx-menu button:active { background: var(--panel2); }
+.ctx-menu .ctx-ico { font-size: 16px; width: 20px; text-align: center; flex: none; }
+.ctx-menu .ctx-lbl { overflow: hidden; text-overflow: ellipsis; }
 
 .typing-bar { padding: 0 8% 6px; font-size: 13px; color: var(--accent); display: flex; gap: 7px; align-items: center; }
 .typing-dots i { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: blink 1.2s infinite; }

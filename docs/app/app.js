@@ -2697,6 +2697,95 @@ $('messages').addEventListener('click', async e => {
   const tool = e.target.closest('[data-act]');
   if (tool && msgEl) return msgAction(tool.dataset.act, msgEl.dataset.id);
 });
+
+/* ---- 🔔 контекстное меню сообщения: правый клик (ПК) / долгое нажатие (телефон).
+   Собираем те же кнопки, что и .msg-tools, но вертикальным попапом — он везде влезает
+   (зажатый в границы экрана) и не полагается на :hover, которого нет на тач-экранах. */
+let ctxMenuEl = null, ctxMsgEl = null;
+function ensureCtxMenu() {
+  if (ctxMenuEl) return ctxMenuEl;
+  ctxMenuEl = document.createElement('div');
+  ctxMenuEl.className = 'ctx-menu';
+  ctxMenuEl.hidden = true;
+  document.body.appendChild(ctxMenuEl);
+  ctxMenuEl.addEventListener('click', e => {
+    const item = e.target.closest('[data-ctx]');
+    if (!item || !ctxMsgEl) return;
+    const act = item.dataset.ctx;
+    const btn = ctxMsgEl.querySelector('.msg-tools button[data-act="' + act + '"]');
+    hideCtx();
+    if (btn) btn.click();   /* вся логика действий уже в .msg-tools — переиспользуем её */
+  });
+  return ctxMenuEl;
+}
+function hideCtx() {
+  if (ctxMenuEl) ctxMenuEl.hidden = true;
+  ctxMsgEl = null;
+}
+function showCtx(msgEl, x, y) {
+  const tools = [].slice.call(msgEl.querySelectorAll('.msg-tools button[data-act]'));
+  if (!tools.length) return;
+  const menu = ensureCtxMenu();
+  ctxMsgEl = msgEl;
+  menu.innerHTML = tools.map(b =>
+    '<button data-ctx="' + esc(b.dataset.act) + '"><span class="ctx-ico">' + esc(b.textContent.trim()) +
+    '</span><span class="ctx-lbl">' + esc(b.title || '') + '</span></button>').join('');
+  menu.hidden = false;
+  /* позиция у курсора/касания, зажатая в границах экрана — влезет и на телефоне, и на ноутбуке */
+  const r = menu.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+  let px = x, py = y;
+  if (px + r.width > vw - 8) px = vw - r.width - 8;
+  if (py + r.height > vh - 8) py = vh - r.height - 8;
+  menu.style.left = Math.max(8, px) + 'px';
+  menu.style.top = Math.max(8, py) + 'px';
+}
+/* правый клик (десктоп) — гасим системное меню браузера */
+document.addEventListener('contextmenu', e => {
+  const msg = e.target && e.target.closest && e.target.closest('.msg');
+  if (!msg) return;
+  e.preventDefault();
+  showCtx(msg, e.clientX || 0, e.clientY || 0);
+});
+/* долгое нажатие (телефон): contextmenu там приходит не везде (iOS) — ловим сами */
+let ctxTouchRec = null, ctxLongFired = false;
+document.addEventListener('touchstart', e => {
+  const msg = e.target && e.target.closest && e.target.closest('.msg');
+  if (!msg || e.touches.length !== 1) { ctxTouchRec = null; return; }
+  const t = e.touches[0];
+  ctxLongFired = false;
+  const rec = ctxTouchRec = { msg, x: t.clientX, y: t.clientY, moved: false, timer: 0 };
+  rec.timer = setTimeout(() => {
+    if (ctxTouchRec === rec && !rec.moved) {
+      ctxLongFired = true;
+      showCtx(msg, rec.x, rec.y);
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (err) {}
+    }
+  }, 450);
+}, { passive: true });
+document.addEventListener('touchmove', () => {
+  if (ctxTouchRec) { ctxTouchRec.moved = true; clearTimeout(ctxTouchRec.timer); }
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (ctxTouchRec) clearTimeout(ctxTouchRec.timer);
+  ctxTouchRec = null;
+  /* после долгого нажатия глушим синтетический click: он не должен ни закрыть
+     только что открытое меню, ни сработать как обычный тап по сообщению */
+  if (ctxLongFired) { ctxLongFired = false; e.preventDefault(); }
+}, { passive: false });
+document.addEventListener('touchcancel', () => {
+  if (ctxTouchRec) clearTimeout(ctxTouchRec.timer);
+  ctxTouchRec = null; ctxLongFired = false;
+}, { passive: true });
+/* закрытие: клик мимо меню, Escape, скролл */
+document.addEventListener('click', e => {
+  if (!ctxMenuEl || ctxMenuEl.hidden) return;
+  if (e.target && e.target.closest && e.target.closest('.ctx-menu')) return;
+  hideCtx();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtx(); });
+window.addEventListener('scroll', () => { if (ctxMenuEl && !ctxMenuEl.hidden) hideCtx(); }, true);
+
 function toggleVoice(box) {
   const audio = box.querySelector('audio');
   const btn = box.querySelector('.play-btn');
