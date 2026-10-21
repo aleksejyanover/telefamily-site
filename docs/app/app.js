@@ -773,6 +773,7 @@ function previewText(c) {
 const AD_PLANS = ['free', 'start', 'plus'];
 function showAds() {
   if (!state.me) return false;
+  if (state.me.adFreeUntil && state.me.adFreeUntil > Date.now()) return false;   /* купленный «День без рекламы» */
   const plan = state.me.premium && state.me.plan ? state.me.plan : 'free';
   return AD_PLANS.indexOf(plan) >= 0;
 }
@@ -780,7 +781,7 @@ function showAds() {
 /* пул рекламы: карточка на КАЖДЫЙ тариф + игры/приложения из магазинов.
    Тап по приложению — настоящая ссылка: iOS → App Store, остальное → Google Play. */
 const AD_TARIFFS = [
-  ['⚠ Реклама на первых трёх тарифах: <b>Бесплатный, «Старт», «Плюс»</b>', '«Семья» и «Про» — полностью без рекламы'],
+  ['⚠ Реклама на первых трёх тарифах: <b>Бесплатный, «Старт», «Плюс»</b>', 'Сними её на день — 50 ₽ (экран «Тарифы») · «Семья» и «Про» без рекламы'],
   ['📢 Тариф <b>«Старт» — 99 ₽/мес</b>: файлы до 1 ГБ', 'Реклама остаётся, зато чатов до 20 и участников до 50'],
   ['⭐ Тариф <b>«Плюс» — 199 ₽/мес</b>: файлы до 2 ГБ', 'Звезда у имени, группы до 100 человек'],
   ['👨‍👩‍👧 Тариф <b>«Семья» — 349 ₽/мес</b>: без рекламы, группы до 200 человек', 'Большие семьи, чаты и каналы без ограничений'],
@@ -3302,6 +3303,8 @@ function renderPlans(d) {
     ${d.owner ? '<div class="owner-banner">👑 Карта владельца активна — любые тарифы для тебя бесплатны</div>' : ''}
     <div class="plan-grid five">${planCards}</div>
     <div class="saved-cards"><span class="sc-label">Привязанные карты:</span> ${cardsLine}</div>
+    <div class="day-pass"><span class="dp-txt">🚫 <b>День без рекламы</b> — 50 ₽ на 24 часа<span class="muted"><br>для «Бесплатного», «Старта» и «Плюса» — на «Семье» и «Про» рекламы и так нет</span></span>
+      <button class="btn ghost" id="plDay"></button></div>
     <div class="modal-actions">
       <button class="btn ghost" id="plOwner">🔑 Карта владельца</button>
       <button class="btn ghost" id="plCancel">Закрыть</button>
@@ -3333,6 +3336,32 @@ function renderPlans(d) {
 
   box.querySelectorAll('.plan').forEach(p => p.onclick = () => { sel = p.dataset.plan; upd(); });
   upd();
+
+  /* «День без рекламы» — разовая покупка на 24 часа (50 ₽), без автопродления */
+  const updDay = () => {
+    const el = $('plDay'); if (!el) return;
+    const until = (state.me && state.me.adFreeUntil) || 0;
+    if (until > Date.now()) {
+      el.textContent = '✓ Без рекламы до ' + new Date(until)
+        .toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      el.disabled = true;
+    } else {
+      el.textContent = 'Купить на день — 50 ₽';
+      el.disabled = false;
+    }
+  };
+  updDay();
+  if ($('plDay')) $('plDay').onclick = async () => {
+    const el = $('plDay');
+    if (!cards.length && !d.owner) { cardModal(sel, true); return; }   /* сначала привязать карту */
+    el.disabled = true; el.textContent = 'Обработка платежа…';
+    try {
+      await api('POST', '/api/adfree', cards.length ? { cardId: cards[0].id } : {});
+      await refreshMe(); updDay();
+      toast('Без рекламы на 24 часа ✓');
+      renderChatList(); if (state.current) renderChatSub();
+    } catch (e) { toast(e.message, true); updDay(); }
+  };
 
   box.querySelectorAll('.chip-del').forEach(a => a.onclick = async () => {
     try {
@@ -3368,10 +3397,12 @@ function renderPlans(d) {
   };
 }
 
-function cardModal(planId) {
-  const price = PLAN_PRICE[planId];
+function cardModal(planId, dayPass) {
+  const price = dayPass ? 50 : PLAN_PRICE[planId];
   const box = openModal(`<h3>💳 Привязка карты</h3>
-    <p class="sub">Оплата тарифа «${PLAN_LABEL[planId]}» — ${price} ₽ в месяц. Номер не хранится: остаются только последние 4 цифры (как в банках).</p>
+    <p class="sub">${dayPass
+      ? 'Оплата: «День без рекламы» — 50 ₽ на 24 часа. Номер не хранится: остаются только последние 4 цифры (как в банках).'
+      : `Оплата тарифа «${PLAN_LABEL[planId]}» — ${price} ₽ в месяц. Номер не хранится: остаются только последние 4 цифры (как в банках).`}</p>
     <div class="field"><label>Номер карты</label><input id="cdNum" inputmode="numeric" placeholder="0000 0000 0000 0000" autocomplete="cc-number"></div>
     <div class="card-row">
       <div class="field"><label>Срок действия</label><input id="cdExp" placeholder="ММ/ГГ" maxlength="5" inputmode="numeric" autocomplete="cc-exp"></div>
@@ -3404,9 +3435,16 @@ function cardModal(planId) {
     try {
       const c = await api('POST', '/api/card', { number: num, exp, cvc, holder });
       b.textContent = 'Списание средств…';
-      const r = await api('POST', '/api/subscribe', { plan: planId, cardId: c.card.id });
-      await refreshMe(); closeModal();
-      toast(`Тариф «${PLAN_LABEL[planId]}» оплачен — ${r.paidWith} ✓`);
+      if (dayPass) {
+        await api('POST', '/api/adfree', { cardId: c.card.id });
+        await refreshMe(); closeModal();
+        toast('Карта привязана — «День без рекламы» активирован: 24 часа без рекламы ✓');
+        renderChatList(); if (state.current) renderChatSub();
+      } else {
+        const r = await api('POST', '/api/subscribe', { plan: planId, cardId: c.card.id });
+        await refreshMe(); closeModal();
+        toast(`Тариф «${PLAN_LABEL[planId]}» оплачен — ${r.paidWith} ✓`);
+      }
     } catch (e) {
       toast(e.message, true); b.disabled = false; b.textContent = `Привязать и оплатить ${price} ₽`;
     }
@@ -3518,7 +3556,7 @@ function helpModal() {
       <div>📢 <b>Канал</b> — меню ☰ → Новый канал: ты владелец, можешь назначить ⭐ админов; подписчики равны и только читают. Подписка: кнопка + → «К каналу»</div>
       <div>📱 <b>Истории</b> — полоса над списком чатов: фото, видео или текст на 24 часа; «Кто увидит» выбираешь при публикации (все / все, кроме / только выбранные), у своих — 👁 кто смотрел</div>
       <div>🔒 <b>Закрытый чат</b> — владелец задаёт пароль в профиле и ставит замок в ⓘ чата; при открытии спросит только у тебя, к тебе все заходят свободно</div>
-      <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка: на «Бесплатном», «Старте» и «Плюсе» есть реклама; «Семья» и «Про» — без рекламы и с большими лимитами (до 5 ГБ и 500 человек)</div>
+      <div>💳 <b>Тарифы</b> — меню ☰ → Тарифы и подписка: на «Бесплатном», «Старте» и «Плюсе» есть реклама — её можно снять на день за 50 ₽ там же («День без рекламы»); «Семья» и «Про» — без рекламы и с большими лимитами (до 5 ГБ и 500 человек)</div>
       <div>🤖 <b>Боты</b> — свой бот: найди в поиске @botfactory и напиши «Хочу создать бота»</div>
       <div>🤫 <b>Секрет</b> — говорят, если 5 раз тапнуть логотип в шапке…</div>
     </div>
