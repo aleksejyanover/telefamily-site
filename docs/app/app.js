@@ -2030,6 +2030,7 @@ function refreshScreenBadge() {
   else b.hidden = true;
 }
 async function stopScreenShare() {
+  try { nativeScreenStop(); } catch (e) {}
   const c = state.call;
   if (!c || !c.screenTrack) return;
   const st = c.screenTrack;
@@ -2064,13 +2065,25 @@ async function stopScreenShare() {
 $('ccScreen').onclick = async () => {
   const c = state.call; if (!c) return;
   if (c.screen) { stopScreenShare(); toast('🖥 Трансляция остановлена'); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    toast('📱 На телефонах показывать экран пока нельзя — это запрет самих браузеров (и iPhone, и Android), транслировать умеют только компьютеры. А чужую трансляцию с телефона смотреть — можно.', true); return;
+  let st = null;
+  if (tfScreen()) {
+    /* телефон (Android-приложение): нативная запись экрана вместо getDisplayMedia */
+    try { st = await nativeScreenStart(); }
+    catch (e) {
+      const msg = (e && e.message) || '';
+      toast(msg.indexOf('отмен') >= 0 ? 'Показ экрана отменён' : (msg || 'Не удалось запустить показ экрана'), true);
+      return;
+    }
+  } else {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      toast('📱 На телефонах показывать экран пока нельзя — это запрет самих браузеров (и iPhone, и Android), транслировать умеют только компьютеры. А чужую трансляцию с телефона смотреть — можно.', true); return;
+    }
+    let s;
+    try { s = await navigator.mediaDevices.getDisplayMedia({ video: true }); }
+    catch (e) { if (!e || e.name !== 'NotAllowedError') toast('Не удалось запустить трансляцию', true); return; }
+    st = s.getVideoTracks()[0];
   }
-  let s;
-  try { s = await navigator.mediaDevices.getDisplayMedia({ video: true }); }
-  catch (e) { if (!e || e.name !== 'NotAllowedError') toast('Не удалось запустить трансляцию', true); return; }
-  const st = s.getVideoTracks()[0]; if (!st) return;
+  if (!st) return;
   c.screenTrack = st; c.screen = true;
   try {
     if (c.group) {                             /* mesh: экран каждому участнику */
