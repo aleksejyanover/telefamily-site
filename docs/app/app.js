@@ -385,6 +385,46 @@ function tfGoOnline() {
 /* ---- фон на Android: живой сервис уведомлений — сообщения и звонки приходят
    даже когда приложение закрыто (кнопки «Ответить/Отклонить» в уведомлении) ---- */
 function tfPush() { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TfPush; } catch (e) { return null; } }
+/* ---- показ экрана с телефона: нативная запись экрана Android (TfScreen) →
+   локальный WS → canvas → обычный видеопоток звонка ---- */
+function tfScreen() { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TfScreen; } catch (e) { return null; } }
+let nativeScreen = null;  /* {ws} активного нативного показа */
+async function nativeScreenStart() {
+  const ctl = tfScreen();
+  if (!ctl) throw new Error('Показ экрана недоступен');
+  const r = await ctl.start();
+  if (!r || r.cancelled) throw new Error('Показ экрана отменён');
+  const ws = new WebSocket('ws://127.0.0.1:' + r.port + '/');
+  ws.binaryType = 'arraybuffer';
+  await new Promise((res, rej) => {
+    ws.onopen = res;
+    ws.onerror = () => rej(new Error('не удалось связаться с показом экрана'));
+  });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  let busy = false;
+  ws.onmessage = async (e) => {
+    if (busy) return;                 /* кадры не копятся, если декод не успевает */
+    busy = true;
+    try {
+      const bmp = await createImageBitmap(new Blob([e.data], { type: 'image/jpeg' }));
+      if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+      ctx.drawImage(bmp, 0, 0);
+      if (bmp.close) bmp.close();
+    } catch (err) {}
+    busy = false;
+  };
+  nativeScreen = { ws: ws };
+  const track = canvas.captureStream(10).getVideoTracks()[0];
+  ws.onclose = () => { try { track.stop(); } catch (e) {} };
+  return track;
+}
+function nativeScreenStop() {
+  if (!nativeScreen) return;
+  try { nativeScreen.ws.close(); } catch (e) {}
+  try { const ctl = tfScreen(); if (ctl && ctl.stop) ctl.stop(); } catch (e) {}
+  nativeScreen = null;
+}
 function tfPushSync() {
   if (!IS_APP || !state.token || !state.me) return;
   const p = tfPush(); if (!p) return;
