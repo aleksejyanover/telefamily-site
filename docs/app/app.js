@@ -384,10 +384,24 @@ function tfGoOnline() {
 
 /* ---- фон на Android: живой сервис уведомлений — сообщения и звонки приходят
    даже когда приложение закрыто (кнопки «Ответить/Отклонить» в уведомлении) ---- */
-function tfPush() { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TfPush; } catch (e) { return null; } }
+const _tfHandles = {};
+function tfPlugin(name) {
+  /* Capacitor 3+: нативные плагины регистрируются вызовом registerPlugin,
+     иначе Capacitor.Plugins[name] не существует вовсе */
+  try {
+    if (_tfHandles[name] !== undefined) return _tfHandles[name];
+    const C = window.Capacitor;
+    let h = null;
+    if (C && C.Plugins && C.Plugins[name]) h = C.Plugins[name];
+    else if (C && C.registerPlugin && C.isNativePlatform && C.isNativePlatform()) h = C.registerPlugin(name);
+    _tfHandles[name] = h;
+    return h;
+  } catch (e) { return null; }
+}
+function tfPush() { return tfPlugin('TfPush'); }
 /* ---- показ экрана с телефона: нативная запись экрана Android (TfScreen) →
    локальный WS → canvas → обычный видеопоток звонка ---- */
-function tfScreen() { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TfScreen; } catch (e) { return null; } }
+function tfScreen() { return tfPlugin('TfScreen'); }
 let nativeScreen = null;  /* {ws} активного нативного показа */
 async function nativeScreenStart() {
   const ctl = tfScreen();
