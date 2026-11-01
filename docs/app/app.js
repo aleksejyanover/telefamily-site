@@ -763,6 +763,16 @@ async function startApp() {
       history.replaceState(null, '', u2.pathname + u2.search);
     }
   } catch (e) {}
+  /* открыли по ссылке-приглашению на бота/человека (?open=@username) — сразу в чат */
+  try {
+    const qOpen = new URLSearchParams(location.search).get('open');
+    if (qOpen) {
+      const un = qOpen.replace(/^@/, '');
+      openDm(un).catch(() => {});
+      const u3 = new URL(location.href); u3.searchParams.delete('open');
+      history.replaceState(null, '', u3.pathname + u3.search);
+    }
+  } catch (e) {}
   /* реклама ПОСЛЕ авторизации: сперва интро-ролик (звук обязателен,
      без кнопки «включить звук») — он же закрывает рекламу этой сессии;
      если интро уже просмотрено — обычный интерстишл.
@@ -1593,6 +1603,7 @@ async function startCall(video) {
   if (state.call) { toast('Уже идёт звонок', true); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Звонки не поддерживаются на этом устройстве', true); return; }
   const peer = callPeerOf(chat);
+  if (peer && peer.bot) { toast('🤖 Боты не принимают звонки', true); return; }   /* бот — не человек, звонить нельзя */
   const peerOffline = peer && !peer.online;   /* звонить можно и не в сети — собеседнику придёт уведомление */
   let local;
   try {
@@ -1993,7 +2004,7 @@ function onCallEvent(m) {
     }
     return;
   }
-  if (m.t === 'call_reject') { endCall('Звонок отклонён', { send: false, logMissed: c.role === 'caller' }); return; }
+  if (m.t === 'call_reject') { endCall(m.reason || 'Звонок отклонён', { send: false, logMissed: c.role === 'caller' }); return; }
   if (m.t === 'call_busy') { endCall(m.reason || 'Абонент занят', { send: false }); return; }
   if (m.t === 'call_end') { endCall(m.reason || 'Звонок завершён', { send: false }); return; }
 }
@@ -2295,8 +2306,10 @@ function renderChatHeader() {
   const other = c.type === 'dm' ? c.members.find(u => u.id !== state.me.id) : null;
   const isSaved = c.type === 'saved';
   $('chatTitle').textContent = c.title;
-  $('btnCallAudio').hidden = isSaved || (c.type !== 'dm' && c.type !== 'group');
-  $('btnCallVideo').hidden = isSaved || (c.type !== 'dm' && c.type !== 'group');
+  /* ботам звонить нельзя: кнопки вызова в шапке прячем (как и в профиле) */
+  const botPeer = !!(other && other.bot);
+  $('btnCallAudio').hidden = isSaved || botPeer || (c.type !== 'dm' && c.type !== 'group');
+  $('btnCallVideo').hidden = isSaved || botPeer || (c.type !== 'dm' && c.type !== 'group');
   $('chatAvatar').outerHTML = isSaved
     ? `<div id="chatAvatar" class="avatar bookmark-ava">${BOOKMARK_SVG}</div>`
     : c.avatar || (other && other.avatar)
