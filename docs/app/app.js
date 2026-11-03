@@ -78,7 +78,7 @@ function toast(text, err) {
   $('toasts').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = '.4s'; setTimeout(() => el.remove(), 400); }, 2600);
 }
-/* 🎨 палитра как в Telegram: у каждого — свой цвет аватара и имени в группе */
+/* 🎨 у каждого — свой цвет аватара и имени в группе */
 const TG_COLORS = ['#6ec9cb', '#65aadd', '#a695e7', '#7bc862', '#e17076', '#faa774', '#e8a33d'];
 function tgColor(id) {
   const s = String(id || '');
@@ -991,7 +991,7 @@ function maybeInterstitial() {
   setTimeout(() => showVideoAd({}), 1800);
 }
 
-/* ---------------------------------------------------- 🖼 Истории (как в Telegram) */
+/* ---------------------------------------------------- 🖼 Истории */
 async function loadStories() {
   if (!state.me) return;
   try {
@@ -1261,7 +1261,7 @@ function chatLockPrompt(chat) {
   $('lkCancel').onclick = closeModal;
 }
 
-/* 💾 «Избранное» (как Saved Messages в Telegram): закладка вместо аватара */
+/* 💾 «Избранное»: закладка вместо аватара */
 const BOOKMARK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11a1 1 0 0 1 1 1v16.2l-6.5-3.8-6.5 3.8V4.5a1 1 0 0 11-1z"/></svg>';
 function savedAva(extra) { return `<div class="avatar bookmark-ava ${extra || ''}">${BOOKMARK_SVG}</div>`; }
 
@@ -1325,7 +1325,7 @@ async function openDm(username) {
   } catch (err) { toast(err.message, true); }
 }
 
-/* ------------------------------------------- 👤 чужие профили (как в Telegram)
+/* ------------------------------------------- 👤 чужие профили
  * Паролей здесь нет и быть не может: сервер отдаёт только публичные поля,
  * пароли видит исключительно владелец в своей панели. */
 async function userModal(userId) {
@@ -2471,7 +2471,7 @@ function scrollBottom(force) {
   if (force || box.scrollHeight - box.scrollTop - box.clientHeight < 160) box.scrollTop = box.scrollHeight;
 }
 
-/* 📜 история: дотянулись до верха — грузим предыдущую страницу (как в Telegram);
+/* 📜 история: дотянулись до верха — грузим предыдущую страницу;
    далеко от низа — показываем кнопку «к последнему сообщению» */
 $('messages').addEventListener('scroll', () => {
   const box = $('messages');
@@ -2486,7 +2486,7 @@ $('messages').addEventListener('scroll', () => {
 });
 $('scrollBottomBtn').addEventListener('click', () => scrollBottom(true));
 
-/* 🔍 поиск в чате: кнопка 🔍 в шапке → строка поиска → совпадения (как «Поиск в чате» в Telegram) */
+/* 🔍 поиск в чате: кнопка 🔍 в шапке → строка поиска → совпадения */
 function resetChatSearchUI() {
   state.searching = false; state.searchResults = [];
   const bar = $('chatSearchBar'); if (bar) bar.hidden = true;
@@ -2914,7 +2914,7 @@ const REACTIONS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
 async function addReaction(id, emoji) {
   try { const d = await api('POST', `/api/messages/${id}/react`, { emoji }); replaceMsg(d.msg); } catch (e) { toast(e.message, true); }
 }
-/* ➡️ пересылка: выбираем чат(ы) — как в Telegram */
+/* ➡️ пересылка: выбираем чат(ы) */
 function forwardModal(id) {
   const m = state.msgs.find(x => x.id === id); if (!m) return;
   const rows = state.chats.map(c => {

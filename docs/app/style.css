@@ -5,7 +5,7 @@
 button:focus { outline: none; }
 button:focus-visible { outline: 2px solid var(--accent); }
 :root {
-  /* тёмная тема — палитра Telegram (ночь) */
+  /* тёмная тема — ночная палитра */
   --accent: #6ab2f2;
   --accent2: #6ab2f2;
   --grad: #4e86d8;
@@ -31,7 +31,7 @@ button:focus-visible { outline: 2px solid var(--accent); }
   --shadow: 0 10px 40px rgba(0,0,0,.45);
   --doodle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340'%3E%3Cg fill='%23ffffff' fill-opacity='.045' font-family='sans-serif' font-size='21'%3E%3Ctext x='18' y='42' transform='rotate(-14 18 42)'%3E✈%EF%B8%8E%3C/text%3E%3Ctext x='120' y='30'%3E♥%EF%B8%8E%3C/text%3E%3Ctext x='230' y='58' transform='rotate(12 230 58)'%3E★%EF%B8%8E%3C/text%3E%3Ctext x='300' y='26'%3E✿%3C/text%3E%3Ctext x='60' y='120' transform='rotate(10 60 120)'%3E☺%EF%B8%8E%3C/text%3E%3Ctext x='180' y='150'%3E☂%EF%B8%8E%3C/text%3E%3Ctext x='290' y='130' transform='rotate(-10 290 130)'%3E✈%EF%B8%8E%3C/text%3E%3Ctext x='24' y='210'%3E❄%EF%B8%8E%3C/text%3E%3Ctext x='130' y='240' transform='rotate(-8 130 240)'%3E★%EF%B8%8E%3C/text%3E%3Ctext x='240' y='220'%3E♥%EF%B8%8E%3C/text%3E%3Ctext x='310' y='270' transform='rotate(14 310 270)'%3E✿%3C/text%3E%3Ctext x='70' y='310'%3E✿%3C/text%3E%3Ctext x='190' y='320' transform='rotate(-12 190 320)'%3E☺%EF%B8%8E%3C/text%3E%3C/g%3E%3C/svg%3E");
 }
-/* светлая тема — палитра Telegram (день): обои с дудлами, белые входящие, зелёные исходящие */
+/* светлая тема — дневная палитра: обои с дудлами, белые входящие, зелёные исходящие */
 [data-theme="light"] {
   --accent: #3390ec; --accent2: #3390ec; --grad: #3390ec;
   --bg: #ffffff; --chat-bg: #dbe4f2; --side: #ffffff; --panel: #ffffff; --panel2: #f4f4f5;
@@ -200,7 +200,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .messages {
   flex: 1; overflow-y: auto; padding: 18px 8% 14px; display: flex; flex-direction: column; gap: 3px;
   background-color: var(--chat-bg);
-  background-image: var(--doodle);   /* обои с дудлами — как в Telegram */
+  background-image: var(--doodle);   /* обои с дудлами */
   scroll-behavior: smooth;
 }
 .day-sep { align-self: center; background: var(--panel2); color: var(--muted); font-size: 12px; padding: 4px 12px; border-radius: 999px; margin: 12px 0 6px; }
@@ -323,7 +323,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 }
 .emoji-btn { position: absolute; right: 4px; bottom: 2px; font-size: 19px; }
 .send-btn { background: var(--grad); color: #fff; border-radius: 50%; box-shadow: 0 5px 16px rgba(51,144,236,.35); }
-.send-btn svg { fill: #fff; stroke: #fff; stroke-width: 1.5; }   /* самолётик как в Telegram */
+.send-btn svg { fill: #fff; stroke: #fff; stroke-width: 1.5; }   /* самолётик */
 .send-btn:hover { color: #fff; background: var(--grad); filter: brightness(1.1); }
 
 .emoji-panel {
@@ -681,7 +681,7 @@ body.party .avatar.big, body.party .avatar-edit .avatar { animation: partyGlow 2
   100% { box-shadow: 0 0 0 3px #ff5c8a, 0 0 20px #ff5c8a; }
 }
 
-/* ------------------------------------------- 👤 чужие профили (телеграм-стиль) */
+/* ------------------------------------------- 👤 чужие профили (современный стиль) */
 .ava-tap { cursor: pointer; flex: none; }
 .msg-author[data-profile] { cursor: pointer; }
 .up-head { text-align: center; padding: 4px 0 12px; }
@@ -718,7 +718,7 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
 .ad-text { flex: 1; min-width: 0; }
 .ad-sub { color: var(--muted); font-size: 12px; }
 .ad-btn { flex: none; padding: 6px 10px; font-size: 12px; }
-/* Хвосты пузырей как в Telegram: рисуем на .msg — у .bubble overflow:hidden */
+/* Хвосты пузырей: рисуем на .msg — у .bubble overflow:hidden */
 .msg .bubble { border-radius: 12px; }
 .msg.in .bubble, .msg.out .bubble { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
 .msg.last.out .bubble { border-top-right-radius: 6px; }
@@ -798,7 +798,7 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
 }
 .sv-tap { position: absolute; top: 60px; bottom: 0; width: 34%; z-index: 2; cursor: pointer; }
 .sv-prev { left: 0; } .sv-next { right: 0; }
-/* подпись текста под фото/видео — как в Telegram (снизу поверх медиа) */
+/* подпись текста под фото/видео (снизу поверх медиа) */
 .sv-caption {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
   padding: 26px 18px 22px; color: #fff; font-size: 15px; line-height: 1.45;
@@ -880,7 +880,7 @@ a.ad-card, a.ad-card:visited { text-decoration: none; color: inherit; }   /* к�
   .promo-shots img { width: 156px; height: 277px; }
 }
 
-/* ---------- 💾 Избранное (как Saved Messages в Telegram) ---------- */
+/* ---------- 💾 Избранное ---------- */
 .bookmark-ava { display: grid; place-items: center; background: linear-gradient(135deg, #3390ec, #1b6fd0); flex: none; }
 .bookmark-ava svg { display: block; }
 .msg-src { font-size: 12px; opacity: .75; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px dashed rgba(125, 133, 144, .45); }
